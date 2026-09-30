@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Reguły bezpieczeństwa: wszyscy mogą CZYTAĆ stacje, linie i komunikaty,
+// ZMIENIAĆ je mogą tylko aktywni technicy/administratorzy z dokumentem w kolekcji "users".
+// Wklej całość w Firebase Console → Firestore Database → Reguły → Opublikuj.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function isStaff() {
+      return signedIn()
+        && exists(userPath())
+        && get(userPath()).data.aktywny == true
+        && get(userPath()).data.rola in ['technik', 'admin'];
+    }
+    function isAdmin() { return isStaff() && get(userPath()).data.rola == 'admin'; }
+
+    match /stacje/{id} {
+      allow read: if true;
+      allow delete: if isStaff();
+      allow create, update: if isStaff()
+        && request.resource.data.nazwa is string
+        && request.resource.data.nazwa.size() > 0 && request.resource.data.nazwa.size() <= 60
+        && request.resource.data.x is int
+        && request.resource.data.y is int
+        && request.resource.data.z is int;
+    }
+
+    match /linie/{id} {
+      allow read: if true;
+      allow delete: if isStaff();
+      allow create, update: if isStaff()
+        && request.resource.data.nazwa is string
+        && request.resource.data.nazwa.size() > 0 && request.resource.data.nazwa.size() <= 40
+        && request.resource.data.trasa is list
+        && request.resource.data.trasa.size() <= 200;
+    }
+
+    match /komunikaty/{id} {
+      allow read: if true;
+      allow delete: if isStaff();
+      allow create, update: if isStaff()
+        && request.resource.data.tytul is string
+        && request.resource.data.tytul.size() > 0 && request.resource.data.tytul.size() <= 200
+        && request.resource.data.tresc is string && request.resource.data.tresc.size() <= 10000
+        && request.resource.data.typ in ['utrudnienie', 'zmiana_trasy', 'objazd', 'zawieszenie', 'prace', 'informacja']
+        && request.resource.data.waznosc in ['niska', 'srednia', 'wysoka']
+        && request.resource.data.od is timestamp
+        && (request.resource.data.get('do', null) == null || request.resource.data.get('do', null) is timestamp)
+        && request.resource.data.linie is list
+        && request.resource.data.stacje is list;
+    }
+
+    match /users/{uid} {
+      // Własny profil może odczytać każdy zalogowany; listę kont — technicy.
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      // Konta tworzy/zmienia/usuwa tylko admin...
+      allow create: if isAdmin()
+        // ...albo pierwszy administrator na stronie setup.html (tylko raz, dopóki nie ma config/setup).
+        || (signedIn() && request.auth.uid == uid
+            && request.resource.data.rola == 'admin'
+            && request.resource.data.aktywny == true
+            && !exists(/databases/$(database)/documents/config/setup)
+            && existsAfter(/databases/$(database)/documents/config/setup));
+      allow update, delete: if isAdmin();
+    }
+
+    match /config/setup {
+      allow read: if true;
+      allow create: if signedIn()
+        && !exists(/databases/$(database)/documents/config/setup)
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.rola == 'admin';
+      allow update, delete: if false;
+    }
+
+    // Wszystko inne zablokowane.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
