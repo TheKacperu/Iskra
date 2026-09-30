@@ -57,6 +57,16 @@ export function fromLocalInput(v) {
   return isNaN(d) ? null : d;
 }
 
+// Czas przejazdu trzymamy w minutach (może być ułamek, np. 0.75 = 45 s).
+export function fmtDur(min) {
+  let s = Math.round(Number(min) * 60);
+  if (!Number.isFinite(s) || s <= 0) return '';
+  if (s < 60) return `${s} s`;
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  return [h && `${h} h`, m && `${m} min`, s && `${s} s`].filter(Boolean).join(' ');
+}
+
 // Koordynaty są opcjonalne — każdy z X/Y/Z może być pusty (null).
 export const hasCoord = (v) => typeof v === 'number' && Number.isFinite(v);
 export function coordsText(s) {

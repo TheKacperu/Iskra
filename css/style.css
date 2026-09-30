@@ -290,7 +290,8 @@ input.invalid, select.invalid, textarea.invalid { border-color: var(--bad); back
 .route-ed .num { font-family: var(--mono); font-size: .8rem; color: var(--muted); width: 1.5em; text-align: right; }
 .route-ed .name { overflow-wrap: anywhere; }
 .route-ed .time { display: flex; align-items: center; gap: 3px; font-size: .8rem; color: var(--muted); }
-.route-ed .time input { width: 64px; padding: 4px 6px; }
+.route-ed .time input { width: 54px; padding: 4px 6px; }
+.route-ed .time input + input { margin-left: 4px; }
 .re-btns { display: flex; gap: 3px; }
 .route-add { display: flex; gap: 8px; flex-wrap: wrap; }
 .route-add select { flex: 1 1 200px; width: auto; }

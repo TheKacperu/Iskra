@@ -105,7 +105,11 @@ function routeEditor(el, value, { withTimes = false } = {}) {
           <span class="handle" title="Przeciągnij">⋮⋮</span>
           <span class="num">${i + 1}</span>
           <span class="name">${s ? `${esc(s.nazwa)} <small class="code">${esc(s.kod)}</small>` : '<i class="muted">usunięta stacja</i>'}</span>
-          ${withTimes && i > 0 ? `<label class="time" title="Czas przejazdu od poprzedniej stacji">+<input type="number" min="0" step="0.5" value="${it.czas ?? ''}" data-t="${i}" aria-label="minuty">min</label>` : '<span class="time"></span>'}
+          ${withTimes && i > 0 ? (() => {
+            const tot = it.czas != null ? Math.round(it.czas * 60) : null;
+            const m = tot != null ? Math.floor(tot / 60) : '', s = tot != null ? tot % 60 : '';
+            return `<span class="time" title="Czas przejazdu od poprzedniej stacji">+<input type="number" min="0" step="1" value="${m}" data-tm="${i}" aria-label="minuty" placeholder="0">min<input type="number" min="0" max="59" step="1" value="${s}" data-ts="${i}" aria-label="sekundy" placeholder="0">s</span>`;
+          })() : '<span class="time"></span>'}
           <span class="re-btns">
             <button type="button" class="btn xs" data-mv="-1" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="W górę">↑</button>
             <button type="button" class="btn xs" data-mv="1" data-i="${i}" ${i === items.length - 1 ? 'disabled' : ''} aria-label="W dół">↓</button>
@@ -132,7 +136,14 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     el.closest('form')?.classList.add('dirty');
     draw();
   });
-  el.addEventListener('input', (e) => { if (e.target.dataset.t) { const v = e.target.value; items[+e.target.dataset.t].czas = v === '' ? null : Number(v); } });
+  el.addEventListener('input', (e) => {
+    const i = e.target.dataset.tm ?? e.target.dataset.ts;
+    if (i === undefined) return;
+    const li = e.target.closest('li');
+    const mv = li.querySelector('[data-tm]').value, sv = li.querySelector('[data-ts]').value;
+    const tot = (Number(mv) || 0) * 60 + (Number(sv) || 0);
+    items[+i].czas = mv === '' && sv === '' ? null : Math.max(0, tot) / 60;
+  });
   el.addEventListener('dragstart', (e) => { const li = e.target.closest('li[data-i]'); if (li) { drag = +li.dataset.i; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; } });
   el.addEventListener('dragend', () => { drag = null; el.querySelectorAll('.dragging,.over').forEach((x) => x.classList.remove('dragging', 'over')); });
   el.addEventListener('dragover', (e) => { const li = e.target.closest('li[data-i]'); if (li && drag !== null) { e.preventDefault(); el.querySelectorAll('.over').forEach((x) => x.classList.remove('over')); li.classList.add('over'); } });
@@ -343,7 +354,7 @@ function formLinia(id) {
       <label class="f">Typ<select name="typ">${U.options(U.LINIA_TYPY, l.typ)}</select></label>
       <label class="f">Status<select name="status">${U.options(U.LINIA_STATUS, l.status)}</select></label>
     </div>
-    <fieldset class="f"><legend>Trasa * <span class="muted small">(kolejność przejazdu; przeciągnij lub użyj strzałek; czas = minuty od poprzedniej stacji)</span></legend>
+    <fieldset class="f"><legend>Trasa * <span class="muted small">(kolejność przejazdu; przeciągnij lub użyj strzałek; czas przejazdu od poprzedniej stacji w min i s)</span></legend>
       <div id="trasa"></div>${err('trasa')}
       ${!state.stacje.length ? '<p class="muted small">Najpierw dodaj stacje w zakładce <a href="#/stacje">Stacje</a>.</p>' : ''}
     </fieldset>

@@ -136,7 +136,7 @@ function viewLinia(id) {
   <header class="line-head" style="--lc:${U.safeColor(l.kolor)}">
     <div>${U.lineChip(l)} <span class="pill ${c}">${t}</span></div>
     <h1>${esc(l.opis || l.nazwa)}</h1>
-    <p class="muted">${esc(U.LINIA_TYPY[l.typ] || '')} · ${trasa.length} stacji${total ? ` · ok. ${total} min przejazdu` : ''}</p>
+    <p class="muted">${esc(U.LINIA_TYPY[l.typ] || '')} · ${trasa.length} stacji${U.fmtDur(total) ? ` · ok. ${U.fmtDur(total)} przejazdu` : ''}</p>
   </header>
   ${wholeLine.length ? `<div class="alert warn">⚠ Utrudnienia na całej linii: ${wholeLine.map((k) => `<a href="#/komunikat/${esc(k.id)}">${esc(k.tytul)}</a>`).join(', ')}</div>` : ''}
   <div class="two-col">
@@ -151,7 +151,7 @@ function viewLinia(id) {
           <span class="dot"></span>
           <div class="stop-body">
             <div><a href="#/stacja/${esc(s.id)}" class="stop-name">${esc(s.nazwa)}</a> <span class="code">${esc(s.kod)}</span>
-            ${i > 0 && x.czas ? `<span class="muted small">+${esc(x.czas)} min</span>` : ''}</div>
+            ${i > 0 && U.fmtDur(x.czas) ? `<span class="muted small">+${U.fmtDur(x.czas)}</span>` : ''}</div>
             <div class="stop-extra">${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
           </div></li>`; }).join('')}</ol>` : '<p class="empty">Trasa nie jest jeszcze ustalona.</p>'}
     </section>
