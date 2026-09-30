@@ -24,7 +24,7 @@ export function seedData(autor = { uid: 'seed', nazwa: 'System' }) {
   const r = (...pairs) => pairs.map(([stacja, czas]) => ({ stacja, czas: czas ?? null }));
   const linie = [
     { id: 's1', nazwa: 'S1', kolor: '#d62828', typ: 'osobowa', status: 'czynna', opis: 'Centralna – Port Północny', trasa: r(['cen'], ['wos', 3], ['fpn', 4], ['ppn', 5]) },
-    { id: 's2', nazwa: 'S2', kolor: '#1d6fd6', typ: 'osobowa', status: 'czynna', opis: 'Centralna – Lodowe Szczyty', trasa: r(['cen'], ['lbr', 3], ['zam', 4], ['lsz', 6]) },
+    { id: 's2', nazwa: 'S2', kolor: '#1d6fd6', typ: 'osobowa', status: 'czynna', opis: 'Centralna – Lodowe Szczyty', trasa: r(['cen'], ['lbr', 3], ['zam', 4], ['lsz', 6]).map((t) => (t.stacja === 'lbr' ? { ...t, nz: true } : t)) },
     { id: 'ic1', nazwa: 'IC Północ–Południe', kolor: '#f2a900', typ: 'ekspres', status: 'czynna', opis: 'Ekspres przez całą mapę', trasa: r(['ppn'], ['cen', 6], ['pus', 4], ['kdi', 3]) },
     { id: 'n1', nazwa: 'N1', kolor: '#7b2cbf', typ: 'metro', status: 'budowa', opis: 'Metro w Netherze', trasa: r(['nhb'], ['nft', 2]) },
   ];

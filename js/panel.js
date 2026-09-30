@@ -94,7 +94,7 @@ async function busy(btn, fn) {
 
 // Edytor trasy: lista stacji z przeciąganiem, strzałkami i opcjonalnym czasem przejazdu.
 function routeEditor(el, value, { withTimes = false } = {}) {
-  let items = value.map((v) => (typeof v === 'string' ? { stacja: v, czas: null } : { stacja: v.stacja, czas: v.czas ?? null }));
+  let items = value.map((v) => (typeof v === 'string' ? { stacja: v, czas: null, nz: false } : { stacja: v.stacja, czas: v.czas ?? null, nz: !!v.nz }));
   let drag = null;
   const stations = [...state.stacje].sort(U.byName);
   const draw = () => {
@@ -104,7 +104,8 @@ function routeEditor(el, value, { withTimes = false } = {}) {
         return `<li draggable="true" data-i="${i}">
           <span class="handle" title="Przeciągnij">⋮⋮</span>
           <span class="num">${i + 1}</span>
-          <span class="name">${s ? `${esc(s.nazwa)} <small class="code">${esc(s.kod)}</small>` : '<i class="muted">usunięta stacja</i>'}</span>
+          <span class="name">${s ? `${esc(s.nazwa)} <small class="code">${esc(s.kod)}</small>` : '<i class="muted">usunięta stacja</i>'}
+            ${withTimes ? `<label class="nz-toggle" title="Pociąg zatrzymuje się tylko na żądanie"><input type="checkbox" data-nz="${i}"${it.nz ? ' checked' : ''}> na żądanie</label>` : ''}</span>
           ${withTimes && i > 0 ? (() => {
             const tot = it.czas != null ? Math.round(it.czas * 60) : null;
             const m = tot != null ? Math.floor(tot / 60) : '', s = tot != null ? tot % 60 : '';
@@ -126,7 +127,7 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     if (b.dataset.add !== undefined) {
       const sel = el.querySelector('.route-add select');
       if (!sel.value) { sel.focus(); return; }
-      items.push({ stacja: sel.value, czas: null });
+      items.push({ stacja: sel.value, czas: null, nz: false });
     } else if (b.dataset.rm !== undefined) {
       items.splice(+b.dataset.rm, 1);
     } else if (b.dataset.mv) {
@@ -136,6 +137,7 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     el.closest('form')?.classList.add('dirty');
     draw();
   });
+  el.addEventListener('change', (e) => { if (e.target.dataset.nz !== undefined) items[+e.target.dataset.nz].nz = e.target.checked; });
   el.addEventListener('input', (e) => {
     const i = e.target.dataset.tm ?? e.target.dataset.ts;
     if (i === undefined) return;
@@ -159,7 +161,7 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     draw();
   });
   draw();
-  return { get: () => items.map((it, i) => ({ stacja: it.stacja, czas: i > 0 && it.czas != null && !isNaN(it.czas) ? it.czas : null })) };
+  return { get: () => items.map((it, i) => ({ stacja: it.stacja, czas: i > 0 && it.czas != null && !isNaN(it.czas) ? it.czas : null, nz: !!it.nz })) };
 }
 
 // ---------- KOMUNIKATY ----------

@@ -147,12 +147,12 @@ function viewLinia(id) {
         const others = state.linie.filter((o) => o.id !== l.id && (o.trasa || []).some((t) => t.stacja === s.id));
         const hit = hitSt.has(s.id);
         const closed = s.status !== 'czynna';
-        return `<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}">
+        return `<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${x.nz ? ' nz' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}">
           <span class="dot"></span>
           <div class="stop-body">
             <div><a href="#/stacja/${esc(s.id)}" class="stop-name">${esc(s.nazwa)}</a> <span class="code">${esc(s.kod)}</span>
             ${i > 0 && U.fmtDur(x.czas) ? `<span class="muted small">+${U.fmtDur(x.czas)}</span>` : ''}</div>
-            <div class="stop-extra">${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
+            <div class="stop-extra">${x.nz ? '<span class="nz-tag" title="Pociąg zatrzymuje się tylko na żądanie">✋ na żądanie</span>' : ''}${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
           </div></li>`; }).join('')}</ol>` : '<p class="empty">Trasa nie jest jeszcze ustalona.</p>'}
     </section>
     <section>
@@ -203,7 +203,10 @@ function viewStacja(id) {
       ${conv ? `<p class="muted small">${conv}</p>` : ''}
       ${s.opis ? `<div class="md">${U.md(s.opis)}</div>` : ''}
       <h2 class="sec-s">Linie</h2>
-      ${ls.length ? `<div class="chips">${ls.map((l) => U.lineChip(l, `#/linia/${l.id}`)).join('')}</div>` : '<p class="muted">Żadna linia nie zatrzymuje się tu.</p>'}
+      ${ls.length ? `<div class="chips">${ls.map((l) => {
+        const nz = (l.trasa || []).some((t) => t.stacja === id && t.nz);
+        return `<span class="st-line">${U.lineChip(l, `#/linia/${l.id}`)}${nz ? '<span class="nz-tag">✋ na żądanie</span>' : ''}</span>`;
+      }).join('')}</div>` : '<p class="muted">Żadna linia nie zatrzymuje się tu.</p>'}
     </section>
     <section>
       <h2 class="sec">Komunikaty <span class="count">${rel.length}</span></h2>

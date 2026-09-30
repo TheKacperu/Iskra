@@ -215,6 +215,11 @@ input.invalid, select.invalid, textarea.invalid { border-color: var(--bad); back
 .stop-extra { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .stop-extra .line-chip { font-size: .72rem; padding: 2px 6px; min-width: 0; }
 .warn-tag { font-size: .75rem; font-weight: 700; color: var(--bad); background: var(--bad-bg); padding: 2px 6px; border-radius: 4px; }
+.stop.nz:not(.hit) .dot { width: 14px; height: 14px; left: 7px; top: 7px; border-width: 3px; border-style: dotted; }
+.nz-tag { font-size: .75rem; font-weight: 600; color: var(--muted); background: var(--surface-2); border: 1px dashed var(--border); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.st-line { display: inline-flex; align-items: center; gap: 4px; }
+.nz-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 600; color: var(--muted); margin-left: 8px; cursor: pointer; white-space: nowrap; }
+.nz-toggle input { width: auto; margin: 0; accent-color: var(--brand-2); }
 .warn-tag.grey { color: var(--muted); background: var(--surface-2); }
 
 /* ===== Stacje ===== */
