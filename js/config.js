@@ -10,12 +10,12 @@
 // ============================================================
 
 export const firebaseConfig = {
-  apiKey: "WPISZ_TUTAJ_API_KEY",
-  authDomain: "twoj-projekt.firebaseapp.com",
-  projectId: "twoj-projekt",
-  storageBucket: "twoj-projekt.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000"
+  apiKey: "AIzaSyCHTP2HlhFYx9acVRAaxAUddTy0uMeenbc",
+  authDomain: "iskra-a7edb.firebaseapp.com",
+  projectId: "iskra-a7edb",
+  storageBucket: "iskra-a7edb.firebasestorage.app",
+  messagingSenderId: "746178973577",
+  appId: "1:746178973577:web:91106c038754748bc9db58"
 };
 
 // Nazwa sieci wyświetlana w nagłówku strony
