@@ -259,13 +259,18 @@ function viewKomunikat(id) {
 // ---------- wyszukiwarka połączeń ----------
 // Szukamy tras jako ciągu „odcinków” (jazda jedną linią od stacji A do B) z maks. 3 przesiadkami.
 // Linie jeżdżą w obie strony. Czas = suma wpisanych czasów odcinków; brakujące liczymy szacunkowo tylko do sortowania.
-const XFER_KEY = 'iskra-xfer-s';
-let savedXfer = null;
-try { savedXfer = localStorage.getItem(XFER_KEY); } catch (e) {}
-const pf = { from: '', to: '', all: false, sort: 'czas', xfer: savedXfer ?? '5' };
+// Czasy przesiadek wpisuje odwiedzający (w sekundach) i zapamiętujemy je w jego przeglądarce.
+const XFER_KEYS = { xfer: 'iskra-xfer-s', xferP: 'iskra-xferp-s' };
+const XFER_DEF = { xfer: 5, xferP: 15 };
+const loadPref = (k) => { try { return localStorage.getItem(XFER_KEYS[k]); } catch (e) { return null; } };
+const pf = { from: '', to: '', all: false, sort: 'czas', xfer: loadPref('xfer') ?? String(XFER_DEF.xfer), xferP: loadPref('xferP') ?? String(XFER_DEF.xferP) };
 const EST_SEG = 2;       // min — szacunek dla odcinka bez wpisanego czasu (tylko do sortowania)
-// Czas na przesiadkę w minutach — wpisywany w sekundach w wyszukiwarce (domyślnie 5 s), doliczany do czasu trasy.
-const xferMin = () => { const v = parseFloat(String(pf.xfer).replace(',', '.')); return (Number.isFinite(v) && v >= 0 ? v : 5) / 60; };
+// Czas przesiadki w minutach: zwykła (zmiana peronu, domyślnie 5 s) albo przez portal (zmiana wymiaru, domyślnie 15 s).
+const prefMin = (k) => { const v = parseFloat(String(pf[k]).replace(',', '.')); return (Number.isFinite(v) && v >= 0 ? v : XFER_DEF[k]) / 60; };
+const xferMin = () => prefMin('xfer');
+const xferPortalMin = () => prefMin('xferP');
+// Przesiadka przez portal = przyjazd w innym wymiarze niż odjazd kolejnej linii.
+const isPortalXfer = (a, b) => !!(a && b && a.dims.length && b.dims.length && a.dims[a.dims.length - 1] !== b.dims[0]);
 const MAX_XFER = 3;
 
 function legInfo(tr, i, j) {
@@ -324,7 +329,9 @@ function findConnections(from, to) {
     const sum = L.reduce((s, g) => s + g.sum, 0);
     const unknown = L.reduce((s, g) => s + g.unknown, 0);
     const xfers = L.length - 1;
-    const est = sum + unknown * EST_SEG + xfers * xferMin();
+    const portalXfers = L.slice(1).filter((g, n) => isPortalXfer(L[n], g)).length;
+    const xferTime = (xfers - portalXfers) * xferMin() + portalXfers * xferPortalMin();
+    const est = sum + unknown * EST_SEG + xferTime;
     const stops = L.reduce((s, g) => s + g.idx.length - 1, 0);
     L.forEach((g) => {
       const ids = new Set(g.idx.map((k) => g.tr[k].stacja));
@@ -334,7 +341,7 @@ function findConnections(from, to) {
         return (onLine && (!(k.stacje || []).length || onSt)) || (!(k.linie || []).length && onSt);
       });
     });
-    const c = { legs: L, sum, unknown, xfers, est, stops };
+    const c = { legs: L, sum, unknown, xfers, portalXfers, xferTime, est, stops };
     // Z tras jadących tymi samymi liniami w tej samej kolejności zostawiamy najlepszą.
     const key = L.map((g) => g.l.id).join('>');
     if (!best.has(key) || best.get(key).est > est) best.set(key, c);
@@ -348,7 +355,7 @@ function findConnections(from, to) {
 }
 
 function timeLabel(c) {
-  const t = c.sum + c.xfers * xferMin();
+  const t = c.sum + c.xferTime;
   if (!c.sum) return 'czas nieznany';
   return `${c.unknown ? 'min.' : 'ok.'} ${U.fmtDur(t)}`;
 }
@@ -362,8 +369,9 @@ function connCard(c, isFastest) {
     const mid = g.idx.slice(1, -1);
     const legT = g.unknown ? (g.sum ? `min. ${U.fmtDur(g.sum)}` : '? min') : U.fmtDur(g.sum) || '—';
     const prev = c.legs[n - 1];
-    const dimChange = n > 0 && prev.dims.length && g.dims.length && prev.dims[prev.dims.length - 1] !== g.dims[0];
-    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b>${dimChange ? ` <span class="dim-b portal">🌀 przez portal do: ${U.WYMIARY[g.dims[0]]}</span>` : ''} ${U.fmtDur(xferMin()) ? `<span class="small">· ${U.fmtDur(xferMin())}</span>` : ''}</li>` : ''}
+    const dimChange = n > 0 && isPortalXfer(prev, g);
+    const xt = U.fmtDur(dimChange ? xferPortalMin() : xferMin());
+    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b>${dimChange ? ` <span class="dim-b portal">🌀 przez portal do: ${U.WYMIARY[g.dims[0]]}</span>` : ''} ${xt ? `<span class="small">· ${xt}</span>` : ''}</li>` : ''}
     <li class="leg" style="--lc:${U.safeColor(g.l.kolor)}">
       <div class="leg-top">${U.lineChip(g.l, `#/linia/${g.l.id}`)}<span class="muted small">kierunek ${stationName(term.stacja)}</span>${g.dims.length > 1 || g.dims.some((d) => d !== 'overworld') ? `<span class="dim-b">${g.dims.map((d) => `${U.DIM_ICON[d]} ${U.WYMIARY[d]}`).join(' → ')}</span>` : ''}<span class="leg-t">${legT}</span></div>
       <div class="leg-st"><a href="#/stacja/${esc(fromId)}">${stationName(fromId)}</a> <span class="arr">→</span> <a href="#/stacja/${esc(toId)}">${stationName(toId)}</a>${g.tr[g.j].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}</div>
@@ -396,7 +404,7 @@ function viewPolaczenia(param) {
   else if (pf.from && pf.to) {
     const r = findConnections(pf.from, pf.to);
     out = r.list.length
-      ? `<p class="muted small">Znaleziono ${r.total} ${U.plural(r.total, 'połączenie', 'połączenia', 'połączeń')}${r.total > r.list.length ? `, pokazuję ${r.list.length} najlepszych` : ''}. Czas trasy to suma czasów przejazdu wpisanych dla odcinków plus ${U.fmtDur(xferMin()) || '0 s'} na każdą przesiadkę (bez czekania na pociąg).</p>
+      ? `<p class="muted small">Znaleziono ${r.total} ${U.plural(r.total, 'połączenie', 'połączenia', 'połączeń')}${r.total > r.list.length ? `, pokazuję ${r.list.length} najlepszych` : ''}. Czas trasy to suma czasów przejazdu wpisanych dla odcinków plus czas przesiadek: ${U.fmtDur(xferMin()) || '0 s'} na zmianę peronu, ${U.fmtDur(xferPortalMin()) || '0 s'} przez portal (bez czekania na pociąg).</p>
          <div class="stack">${r.list.map((c) => connCard(c, r.total > 1 && c === r.fastest && !c.unknown)).join('')}</div>`
       : `<p class="empty">Brak połączenia między tymi stacjami${pf.all ? '' : ' (pomijam linie zawieszone i w budowie — zaznacz opcję powyżej, żeby je uwzględnić)'}.</p>`;
   } else out = '<p class="empty">Wybierz stację początkową i docelową.</p>';
@@ -411,7 +419,8 @@ function viewPolaczenia(param) {
         <button class="seg-b${pf.sort === 'czas' ? ' on' : ''}" data-sort="czas">Najszybsze</button>
         <button class="seg-b${pf.sort === 'przesiadki' ? ' on' : ''}" data-sort="przesiadki">Najmniej przesiadek</button>
       </div>
-      <label class="xfer-in small">Czas na przesiadkę <input type="number" id="pf-xfer" data-pf="xfer" min="0" step="1" value="${esc(pf.xfer)}" aria-label="Czas na przesiadkę w sekundach"> s</label>
+      <label class="xfer-in small" title="Przesiadka na tej samej stacji, w tym samym wymiarze">🔁 Przesiadka <input type="number" id="pf-xfer" data-pf="xfer" min="0" step="1" value="${esc(pf.xfer)}" aria-label="Czas zwykłej przesiadki w sekundach"> s</label>
+      <label class="xfer-in small" title="Przesiadka ze zmianą wymiaru, np. z Netheru do Overworldu">🌀 Przez portal <input type="number" id="pf-xferp" data-pf="xferP" min="0" step="1" value="${esc(pf.xferP)}" aria-label="Czas przesiadki przez portal w sekundach"> s</label>
       <label class="chk-line small"><input type="checkbox" id="pf-all" data-pf="all"${pf.all ? ' checked' : ''}> Uwzględnij linie zawieszone i w budowie</label>
     </div>
   </section>
@@ -440,7 +449,7 @@ app.addEventListener('input', (e) => {
   else if (t.dataset.sq !== undefined) { sq = t.value; render(); }
   else if (t.dataset.pf !== undefined) {
     pf[t.dataset.pf] = t.type === 'checkbox' ? t.checked : t.value;
-    if (t.dataset.pf === 'xfer') { try { localStorage.setItem(XFER_KEY, t.value); } catch (e) {} }
+    if (XFER_KEYS[t.dataset.pf]) { try { localStorage.setItem(XFER_KEYS[t.dataset.pf], t.value); } catch (e) {} }
     setConnHash(); render();
   }
 });
