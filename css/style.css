@@ -232,6 +232,37 @@ input.invalid, select.invalid, textarea.invalid { border-color: var(--bad); back
 .coords span { background: var(--surface-2); border-radius: 6px; padding: 6px 10px; }
 .coords b { font-size: 1.1rem; }
 
+/* ===== Wyszukiwarka połączeń ===== */
+.conn-search { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: end; margin-bottom: 14px; }
+.conn-search > label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; font-weight: 600; color: var(--muted); }
+.conn-search .swap { height: 40px; width: 40px; font-size: 1.1rem; transform: rotate(90deg); }
+.conn-opts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+@media (max-width: 600px) {
+  .conn-search { grid-template-columns: minmax(0, 1fr); }
+  .conn-search .swap { justify-self: center; transform: none; }
+}
+.seg-sm { display: inline-flex; }
+.seg-b { font: 600 .85rem var(--font); background: var(--surface); color: var(--text); border: 0; border-right: 1px solid var(--border); padding: 7px 12px; cursor: pointer; }
+.seg-b:last-child { border-right: 0; }
+.seg-b.on { background: var(--brand-2); color: #fff; }
+.conn { display: grid; gap: 10px; }
+.conn.conn-bad { border-color: var(--bad); }
+.conn-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.conn-time { font: 700 1.5rem/1 var(--font-cond); }
+.conn-note { margin: 0; }
+.legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.leg { border-left: 5px solid var(--lc); background: var(--surface-2); border-radius: 0 8px 8px 0; padding: 8px 12px; display: grid; gap: 4px; }
+.leg-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.leg-t { margin-left: auto; font-weight: 700; font-family: var(--mono); font-size: .9rem; }
+.leg-st { font-weight: 600; }
+.leg-st a { color: var(--text); }
+.leg-stops summary { cursor: pointer; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.leg-stops ul { margin: 4px 0 0; padding-left: 1.2em; font-size: .9rem; }
+.leg-alert { display: block; font-size: .85rem; font-weight: 600; text-decoration: none; padding: 4px 8px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
+.leg-alert.sev-wysoka { background: var(--bad-bg); color: var(--bad); }
+.leg-alert:hover { text-decoration: underline; }
+.xfer { font-size: .85rem; color: var(--muted); padding: 2px 0 2px 14px; }
+
 /* ===== Panel ===== */
 .page-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
 .page-head h1 { margin: 0; }

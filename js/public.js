@@ -207,6 +207,7 @@ function viewStacja(id) {
         const nz = (l.trasa || []).some((t) => t.stacja === id && t.nz);
         return `<span class="st-line">${U.lineChip(l, `#/linia/${l.id}`)}${nz ? '<span class="nz-tag">✋ na żądanie</span>' : ''}</span>`;
       }).join('')}</div>` : '<p class="muted">Żadna linia nie zatrzymuje się tu.</p>'}
+      ${ls.length && s.status !== 'zamknieta' ? `<p><a class="btn sm" href="#/polaczenia/${esc(id)}~">🔎 Szukaj połączenia z tej stacji</a></p>` : ''}
     </section>
     <section>
       <h2 class="sec">Komunikaty <span class="count">${rel.length}</span></h2>
@@ -234,6 +235,158 @@ function viewKomunikat(id) {
   return `<a class="back" href="#/">← Wszystkie utrudnienia</a>${card(k, { full: true })}`;
 }
 
+// ---------- wyszukiwarka połączeń ----------
+// Szukamy tras jako ciągu „odcinków” (jazda jedną linią od stacji A do B) z maks. 3 przesiadkami.
+// Linie jeżdżą w obie strony. Czas = suma wpisanych czasów odcinków; brakujące liczymy szacunkowo tylko do sortowania.
+const pf = { from: '', to: '', all: false, sort: 'czas' };
+const EST_SEG = 2;       // min — szacunek dla odcinka bez wpisanego czasu (tylko do sortowania)
+const XFER_COST = 1;     // min — „koszt” przesiadki przy sortowaniu
+const MAX_XFER = 3;
+
+function legInfo(tr, i, j) {
+  const [a, b] = i < j ? [i, j] : [j, i];
+  let sum = 0, unknown = 0;
+  for (let k = a + 1; k <= b; k++) {
+    const c = Number(tr[k].czas);
+    if (tr[k].czas != null && Number.isFinite(c) && c > 0) sum += c; else unknown++;
+  }
+  const idx = [];
+  for (let k = i; k !== j + Math.sign(j - i); k += Math.sign(j - i)) idx.push(k);
+  return { sum, unknown, idx };
+}
+
+function findConnections(from, to) {
+  const st = (id) => byId('stacje', id);
+  const lines = state.linie
+    .filter((l) => pf.all || l.status === 'czynna')
+    .map((l) => ({ l, tr: (l.trasa || []).filter((t) => st(t.stacja)) }));
+  const found = [];
+  const dfs = (at, legs, visited, used) => {
+    if (found.length > 500 || legs.length > MAX_XFER) return;
+    for (const { l, tr } of lines) {
+      if (used.has(l.id)) continue;
+      tr.forEach((t, i) => {
+        if (t.stacja !== at) return;
+        for (const dir of [1, -1]) {
+          const passed = [];
+          for (let j = i + dir; j >= 0 && j < tr.length; j += dir) {
+            const sid = tr[j].stacja;
+            if (visited.has(sid)) break;
+            passed.push(sid);
+            const leg = { l, tr, i, j, dir };
+            if (sid === to) { if (st(sid).status !== 'zamknieta') found.push([...legs, leg]); break; }
+            if (st(sid).status === 'zamknieta') continue;   // przez zamkniętą stację się przejeżdża, ale nie przesiada
+            dfs(sid, [...legs, leg], new Set([...visited, ...passed]), new Set([...used, l.id]));
+          }
+        }
+      });
+    }
+  };
+  if (from && to && from !== to) dfs(from, [], new Set([from]), new Set());
+
+  const now = new Date();
+  const active = withStatus(now).filter((k) => k._s === 'aktywny');
+  const best = new Map();
+  for (const legs of found) {
+    const L = legs.map((g) => ({ ...g, ...legInfo(g.tr, g.i, g.j) }));
+    const sum = L.reduce((s, g) => s + g.sum, 0);
+    const unknown = L.reduce((s, g) => s + g.unknown, 0);
+    const xfers = L.length - 1;
+    const est = sum + unknown * EST_SEG + xfers * XFER_COST;
+    const stops = L.reduce((s, g) => s + g.idx.length - 1, 0);
+    L.forEach((g) => {
+      const ids = new Set(g.idx.map((k) => g.tr[k].stacja));
+      g.alerts = active.filter((k) => {
+        const onLine = (k.linie || []).includes(g.l.id);
+        const onSt = (k.stacje || []).some((s) => ids.has(s));
+        return (onLine && (!(k.stacje || []).length || onSt)) || (!(k.linie || []).length && onSt);
+      });
+    });
+    const c = { legs: L, sum, unknown, xfers, est, stops };
+    // Z tras jadących tymi samymi liniami w tej samej kolejności zostawiamy najlepszą.
+    const key = L.map((g) => g.l.id).join('>');
+    if (!best.has(key) || best.get(key).est > est) best.set(key, c);
+  }
+  const res = [...best.values()];
+  const byTime = (a, b) => a.est - b.est || a.xfers - b.xfers;
+  const byXfer = (a, b) => a.xfers - b.xfers || a.est - b.est;
+  res.sort(pf.sort === 'przesiadki' ? byXfer : byTime);
+  const fastest = [...res].sort(byTime)[0];
+  return { list: res.slice(0, 6), fastest, total: res.length };
+}
+
+function timeLabel(c) {
+  if (!c.unknown) return c.sum ? `ok. ${U.fmtDur(c.sum)}` : 'czas nieznany';
+  if (!c.sum) return 'czas nieznany';
+  return `min. ${U.fmtDur(c.sum)}`;
+}
+
+function connCard(c, isFastest) {
+  const stationName = (id) => esc(byId('stacje', id)?.nazwa || '?');
+  const suspended = c.legs.some((g) => g.alerts.some((k) => k.typ === 'zawieszenie'));
+  const legsHtml = c.legs.map((g, n) => {
+    const fromId = g.tr[g.i].stacja, toId = g.tr[g.j].stacja;
+    const term = g.dir > 0 ? g.tr[g.tr.length - 1] : g.tr[0];
+    const mid = g.idx.slice(1, -1);
+    const legT = g.unknown ? (g.sum ? `min. ${U.fmtDur(g.sum)}` : '? min') : U.fmtDur(g.sum) || '—';
+    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b></li>` : ''}
+    <li class="leg" style="--lc:${U.safeColor(g.l.kolor)}">
+      <div class="leg-top">${U.lineChip(g.l, `#/linia/${g.l.id}`)}<span class="muted small">kierunek ${stationName(term.stacja)}</span><span class="leg-t">${legT}</span></div>
+      <div class="leg-st"><a href="#/stacja/${esc(fromId)}">${stationName(fromId)}</a> <span class="arr">→</span> <a href="#/stacja/${esc(toId)}">${stationName(toId)}</a>${g.tr[g.j].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}</div>
+      ${mid.length ? `<details class="leg-stops"><summary>${mid.length} ${U.plural(mid.length, 'stacja', 'stacje', 'stacji')} po drodze</summary><ul>${mid.map((k) => `<li>${stationName(g.tr[k].stacja)}${g.tr[k].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}${U.fmtDur(g.tr[k].czas) ? ` <span class="muted small">+${U.fmtDur(g.tr[k].czas)}</span>` : ''}</li>`).join('')}</ul></details>` : ''}
+      ${g.alerts.map((k) => `<a class="leg-alert sev-${esc(k.waznosc)}" href="#/komunikat/${esc(k.id)}">${(U.TYPY[k.typ] || U.TYPY.informacja).icon} ${esc(k.tytul)}</a>`).join('')}
+    </li>`;
+  }).join('');
+  return `<article class="card conn${suspended ? ' conn-bad' : ''}">
+    <div class="conn-head">
+      <span class="conn-time">${timeLabel(c)}</span>
+      <span class="muted">${c.xfers ? `${c.xfers} ${U.plural(c.xfers, 'przesiadka', 'przesiadki', 'przesiadek')}` : 'bez przesiadek'} · ${c.stops} ${U.plural(c.stops, 'odcinek', 'odcinki', 'odcinków')}</span>
+      ${isFastest ? '<span class="pill ok">Najszybsze</span>' : ''}
+      ${suspended ? '<span class="pill bad">Zawieszone kursy na trasie</span>' : c.legs.some((g) => g.alerts.length) ? '<span class="pill warn">Utrudnienia na trasie</span>' : ''}
+    </div>
+    ${c.unknown && c.sum ? `<p class="muted small conn-note">Dla ${c.unknown} ${U.plural(c.unknown, 'odcinka', 'odcinków', 'odcinków')} nie wpisano czasu przejazdu.</p>` : ''}
+    <ol class="legs">${legsHtml}</ol>
+  </article>`;
+}
+
+function viewPolaczenia(param) {
+  if (param !== null && param !== undefined) {
+    const [a = '', b = ''] = param.split('~');
+    pf.from = byId('stacje', a) ? a : '';
+    pf.to = byId('stacje', b) ? b : '';
+  }
+  const stacje = [...state.stacje].sort(U.byName);
+  const opts = (sel) => `<option value="">— wybierz stację —</option>` + stacje.map((s) => `<option value="${esc(s.id)}"${s.id === sel ? ' selected' : ''}${s.status === 'zamknieta' ? ' disabled' : ''}>${esc(s.nazwa)} (${esc(s.kod)})${s.status === 'zamknieta' ? ' — zamknięta' : ''}</option>`).join('');
+  let out = '';
+  if (pf.from && pf.to && pf.from === pf.to) out = '<p class="empty">Wybierz dwie różne stacje.</p>';
+  else if (pf.from && pf.to) {
+    const r = findConnections(pf.from, pf.to);
+    out = r.list.length
+      ? `<p class="muted small">Znaleziono ${r.total} ${U.plural(r.total, 'połączenie', 'połączenia', 'połączeń')}${r.total > r.list.length ? `, pokazuję ${r.list.length} najlepszych` : ''}. Czasy to suma czasów przejazdu wpisanych dla odcinków, bez czekania na pociąg i przesiadek.</p>
+         <div class="stack">${r.list.map((c) => connCard(c, r.total > 1 && c === r.fastest && !c.unknown)).join('')}</div>`
+      : `<p class="empty">Brak połączenia między tymi stacjami${pf.all ? '' : ' (pomijam linie zawieszone i w budowie — zaznacz opcję powyżej, żeby je uwzględnić)'}.</p>`;
+  } else out = '<p class="empty">Wybierz stację początkową i docelową.</p>';
+
+  return `<h1>Wyszukiwarka połączeń</h1>
+  <section class="card conn-search">
+    <label>Skąd<select id="pf-from" data-pf="from">${opts(pf.from)}</select></label>
+    <button class="btn icon swap" data-swap title="Zamień stacje" aria-label="Zamień stacje">⇅</button>
+    <label>Dokąd<select id="pf-to" data-pf="to">${opts(pf.to)}</select></label>
+    <div class="conn-opts">
+      <div class="seg seg-sm" role="group" aria-label="Sortowanie">
+        <button class="seg-b${pf.sort === 'czas' ? ' on' : ''}" data-sort="czas">Najszybsze</button>
+        <button class="seg-b${pf.sort === 'przesiadki' ? ' on' : ''}" data-sort="przesiadki">Najmniej przesiadek</button>
+      </div>
+      <label class="chk-line small"><input type="checkbox" id="pf-all" data-pf="all"${pf.all ? ' checked' : ''}> Uwzględnij linie zawieszone i w budowie</label>
+    </div>
+  </section>
+  ${out}`;
+}
+
+function setConnHash() {
+  history.replaceState(null, '', `#/polaczenia/${encodeURIComponent(pf.from)}~${encodeURIComponent(pf.to)}`);
+}
+
 const notFound = (msg) => `<div class="card center"><h1>Nie znaleziono</h1><p>${msg}</p><a class="btn" href="#/">Strona główna</a></div>`;
 
 // ---------- render ----------
@@ -241,7 +394,7 @@ function render() {
   if (state.error) { app.innerHTML = `<div class="alert bad">Nie udało się wczytać danych. ${esc(errMsg(state.error))}</div>`; return; }
   if (!['stacje', 'linie', 'komunikaty'].every((c) => state.ready[c])) { app.innerHTML = '<p class="loading">Ładowanie…</p>'; return; }
   const { p, id } = route();
-  const views = { '': viewHome, linie: viewLinie, linia: () => viewLinia(id), stacje: viewStacje, stacja: () => viewStacja(id), archiwum: viewArchiwum, komunikat: () => viewKomunikat(id) };
+  const views = { '': viewHome, polaczenia: () => viewPolaczenia(id), linie: viewLinie, linia: () => viewLinia(id), stacje: viewStacje, stacja: () => viewStacja(id), archiwum: viewArchiwum, komunikat: () => viewKomunikat(id) };
   renderInto(app, (views[p] || (() => notFound('Nie ma takiej strony.')))());
 }
 
@@ -250,10 +403,17 @@ app.addEventListener('input', (e) => {
   if (t.dataset.f !== undefined) { f[t.dataset.f] = t.value; render(); }
   else if (t.dataset.af !== undefined) { af[t.dataset.af] = t.value; render(); }
   else if (t.dataset.sq !== undefined) { sq = t.value; render(); }
+  else if (t.dataset.pf !== undefined) {
+    pf[t.dataset.pf] = t.type === 'checkbox' ? t.checked : t.value;
+    setConnHash(); render();
+  }
 });
 app.addEventListener('click', (e) => {
   const c = e.target.closest('[data-copy]');
   if (c) copyText(c.dataset.copy);
+  if (e.target.closest('[data-swap]')) { [pf.from, pf.to] = [pf.to, pf.from]; setConnHash(); render(); }
+  const so = e.target.closest('[data-sort]');
+  if (so) { pf.sort = so.dataset.sort; render(); }
   if (e.target.closest('[data-clear]')) { Object.assign(f, { linia: '', typ: '', status: 'biezace', q: '' }); render(); }
 });
 

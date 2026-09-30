@@ -10,7 +10,7 @@ Strona z informacjami o kolejkach na serwerze Minecraft. Pokazuje linie, trasy, 
 
 | Strona | Co robi |
 |---|---|
-| `index.html` | Publiczna: stan sieci, aktywne i nadchodzące utrudnienia z filtrami, linie ze schematem trasy, stacje z koordynatami (kopiowanie `/tp`), archiwum |
+| `index.html` | Publiczna: stan sieci, aktywne i nadchodzące utrudnienia z filtrami, wyszukiwarka połączeń (z przesiadkami i czasem przejazdu), linie ze schematem trasy, stacje z koordynatami (kopiowanie `/tp`), archiwum |
 | `panel.html` | Panel technika: komunikaty (dodaj, edytuj, duplikuj, zakończ, usuń), linie i trasy, stacje, użytkownicy (tylko admin), zmiana hasła |
 | `login.html` | Logowanie technika (login + hasło) |
 | `setup.html` | Jednorazowe utworzenie pierwszego administratora |

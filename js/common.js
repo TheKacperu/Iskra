@@ -19,7 +19,7 @@ export function toggleTheme() {
 const LOGO = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M13.5 2 4 13.5h6.5L9 22l10-12.5h-6.7z"/></svg>`;
 
 const NAV = {
-  public: [['', 'Utrudnienia', ['komunikat']], ['linie', 'Linie', ['linia']], ['stacje', 'Stacje', ['stacja']], ['archiwum', 'Archiwum', []]],
+  public: [['', 'Utrudnienia', ['komunikat']], ['polaczenia', 'Połączenia', []], ['linie', 'Linie', ['linia']], ['stacje', 'Stacje', ['stacja']], ['archiwum', 'Archiwum', []]],
   panel: [['komunikaty', 'Komunikaty', ['', 'komunikat', 'duplikuj']], ['linie', 'Linie', ['linia']], ['stacje', 'Stacje', ['stacja']], ['uzytkownicy', 'Użytkownicy', [], 'admin'], ['konto', 'Moje konto', []]],
 };
 

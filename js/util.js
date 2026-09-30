@@ -67,6 +67,13 @@ export function fmtDur(min) {
   return [h && `${h} h`, m && `${m} min`, s && `${s} s`].filter(Boolean).join(' ');
 }
 
+// Polska odmiana: plural(2, 'przesiadka', 'przesiadki', 'przesiadek') → "przesiadki"
+export function plural(n, one, few, many) {
+  if (n === 1) return one;
+  const d = n % 10, dd = n % 100;
+  return d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? few : many;
+}
+
 // Koordynaty są opcjonalne — każdy z X/Y/Z może być pusty (null).
 export const hasCoord = (v) => typeof v === 'number' && Number.isFinite(v);
 export function coordsText(s) {
