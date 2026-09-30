@@ -67,6 +67,48 @@ export function fmtDur(min) {
   return [h && `${h} h`, m && `${m} min`, s && `${s} s`].filter(Boolean).join(' ');
 }
 
+// ---------- wymiary i stacje portalowe ----------
+// Stacja portalowa ma drugą lokalizację w innym wymiarze (wymiar2 + x2/y2/z2).
+export const DIM_ID = { overworld: 'minecraft:overworld', nether: 'minecraft:the_nether', end: 'minecraft:the_end' };
+export const DIM_ICON = { overworld: '🌳', nether: '🔥', end: '🌌' };
+export function dimsOf(s) {
+  if (!s) return [];
+  const d = [s.wymiar || 'overworld'];
+  if (s.portal && s.wymiar2 && s.wymiar2 !== d[0]) d.push(s.wymiar2);
+  return d;
+}
+export const dimsLabel = (s) => dimsOf(s).map((d) => WYMIARY[d]).join(' ⇄ ');
+// Druga lokalizacja jako „pseudo-stacja”, żeby używać tych samych helperów co dla pierwszej.
+export const side2 = (s) => ({ wymiar: s.wymiar2, x: s.x2, y: s.y2, z: s.z2 });
+
+// Wymiar każdego odcinka trasy (indeks k = odcinek z k-1 do k; out[0] = null).
+// Ręczny wybór (trasa[k].wymiar) ma pierwszeństwo; inaczej bierzemy wspólny wymiar obu stacji,
+// a gdy obie są portalowe — Nether (po to buduje się tunele między portalami).
+export function segDims(trasa, getSt) {
+  const out = [null], warn = [null];
+  for (let k = 1; k < trasa.length; k++) {
+    const a = dimsOf(getSt(trasa[k - 1].stacja)), b = dimsOf(getSt(trasa[k].stacja));
+    const common = a.filter((d) => b.includes(d));
+    const manual = trasa[k].wymiar;
+    let d;
+    if (manual && common.includes(manual)) d = manual;
+    else if (common.length === 1) d = common[0];
+    else if (common.length > 1) d = common.includes('nether') ? 'nether' : common[0];
+    else d = b[0] || a[0] || null;
+    out.push(d);
+    warn.push(common.length === 0 && a.length && b.length);
+  }
+  return { dims: out, warn, ambiguous: (k) => {
+    const a = dimsOf(getSt(trasa[k - 1]?.stacja)), b = dimsOf(getSt(trasa[k]?.stacja));
+    return a.filter((d) => b.includes(d)).length > 1;
+  } };
+}
+
+export function tpCommand(loc) {
+  if (![loc.x, loc.y, loc.z].every(hasCoord)) return '';
+  return `/execute in ${DIM_ID[loc.wymiar] || DIM_ID.overworld} run tp @s ${loc.x} ${loc.y} ${loc.z}`;
+}
+
 // Polska odmiana: plural(2, 'przesiadka', 'przesiadki', 'przesiadek') → "przesiadki"
 export function plural(n, one, few, many) {
   if (n === 1) return one;

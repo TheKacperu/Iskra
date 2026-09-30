@@ -25,7 +25,11 @@ service cloud.firestore {
         // Koordynaty są opcjonalne: liczba całkowita albo brak (null).
         && (request.resource.data.get('x', null) == null || request.resource.data.x is int)
         && (request.resource.data.get('y', null) == null || request.resource.data.y is int)
-        && (request.resource.data.get('z', null) == null || request.resource.data.z is int);
+        && (request.resource.data.get('z', null) == null || request.resource.data.z is int)
+        // Druga strona stacji portalowej (też opcjonalna).
+        && (request.resource.data.get('x2', null) == null || request.resource.data.x2 is int)
+        && (request.resource.data.get('y2', null) == null || request.resource.data.y2 is int)
+        && (request.resource.data.get('z2', null) == null || request.resource.data.z2 is int);
     }
 
     match /linie/{id} {

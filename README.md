@@ -62,6 +62,18 @@ Pod spodem login `kacper` jest zapisywany w Firebase jako `kacper@technik.iskra`
 2. **Linie:** numer, kolor, typ, trasa (dodajesz stacje po kolei, kolejność zmieniasz przeciąganiem lub strzałkami, czas przejazdu w minutach jest opcjonalny).
 3. **Komunikaty:** rodzaj (utrudnienie, zmiana trasy, objazd, zawieszenie, prace, informacja), ważność, od–do, linie i stacje, treść, opcjonalna trasa objazdowa.
 
+### Linie przez Nether (stacje portalowe)
+
+Stacja, na której jest portal, to **jedna stacja z dwiema lokalizacjami**. W formularzu stacji zaznacz **„🌀 Stacja portalowa”** i podaj drugi wymiar oraz koordynaty. Przycisk „Przelicz” liczy je ×8 lub ÷8.
+
+Przykład linii Overworld → Nether → Overworld: `Las Brzozowy (OW)` → `Zamek (portal)` → `Pustynia (portal)` → `Kopalnia (OW)`.
+
+- Wymiar odcinka wylicza się sam ze wspólnego wymiaru obu stacji.
+- Między dwiema stacjami portalowymi domyślnie przyjmowany jest Nether. W edytorze trasy możesz to zmienić na Overworld.
+- Na schemacie linii odcinki w Netherze są przerywane, a przejścia przez portal zaznaczone.
+- Wyszukiwarka połączeń pokazuje wymiary na każdym odcinku i przejście przez portal przy przesiadce.
+- Na stronie stacji portalowej są dwie komendy teleportu (`/execute in … run tp`), po jednej na każdy wymiar.
+
 Treść komunikatu obsługuje proste formatowanie: `**pogrubienie**`, `*kursywa*`, `- lista`, `[link](https://...)`.
 
 ## Podgląd lokalny

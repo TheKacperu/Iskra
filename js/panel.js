@@ -94,10 +94,25 @@ async function busy(btn, fn) {
 
 // Edytor trasy: lista stacji z przeciąganiem, strzałkami i opcjonalnym czasem przejazdu.
 function routeEditor(el, value, { withTimes = false } = {}) {
-  let items = value.map((v) => (typeof v === 'string' ? { stacja: v, czas: null, nz: false } : { stacja: v.stacja, czas: v.czas ?? null, nz: !!v.nz }));
+  let items = value.map((v) => (typeof v === 'string' ? { stacja: v, czas: null, nz: false } : { stacja: v.stacja, czas: v.czas ?? null, nz: !!v.nz, wymiar: v.wymiar || null }));
   let drag = null;
   const stations = [...state.stacje].sort(U.byName);
+  const getSt = (id) => byId('stacje', id);
+  // Znacznik wymiaru odcinka: pokazujemy go, gdy linia nie jest w całości w Overworldzie.
+  const dimCell = (sd, i, multi) => {
+    if (!withTimes || i === 0) return '';
+    const d = sd.dims[i];
+    if (sd.warn[i]) return `<span class="dim-b warn" title="Stacje są w różnych wymiarach. Oznacz jedną z nich jako stację portalową.">⚠ różne wymiary</span>`;
+    if (sd.ambiguous(i)) {
+      const a = U.dimsOf(getSt(items[i - 1].stacja)), b = U.dimsOf(getSt(items[i].stacja));
+      const common = a.filter((x) => b.includes(x));
+      return `<label class="dim-b" title="Obie stacje są portalowe. Wybierz, którą stroną jedzie pociąg.">odcinek w <select data-dim="${i}">${common.map((x) => `<option value="${x}"${x === d ? ' selected' : ''}>${U.DIM_ICON[x]} ${U.WYMIARY[x]}</option>`).join('')}</select></label>`;
+    }
+    return multi && d ? `<span class="dim-b">${U.DIM_ICON[d]} ${U.WYMIARY[d]}</span>` : '';
+  };
   const draw = () => {
+    const sd = U.segDims(items, getSt);
+    const multi = sd.dims.some((d) => d && d !== 'overworld');
     el.innerHTML = `
       ${items.length ? `<ol class="route-ed">${items.map((it, i) => {
         const s = byId('stacje', it.stacja);
@@ -105,7 +120,9 @@ function routeEditor(el, value, { withTimes = false } = {}) {
           <span class="handle" title="Przeciągnij">⋮⋮</span>
           <span class="num">${i + 1}</span>
           <span class="name">${s ? `${esc(s.nazwa)} <small class="code">${esc(s.kod)}</small>` : '<i class="muted">usunięta stacja</i>'}
-            ${withTimes ? `<label class="nz-toggle" title="Pociąg zatrzymuje się tylko na żądanie"><input type="checkbox" data-nz="${i}"${it.nz ? ' checked' : ''}> na żądanie</label>` : ''}</span>
+            ${s?.portal ? `<span class="dim-b portal" title="Stacja portalowa: ${esc(U.dimsLabel(s))}">🌀 portal</span>` : ''}
+            ${withTimes ? `<label class="nz-toggle" title="Pociąg zatrzymuje się tylko na żądanie"><input type="checkbox" data-nz="${i}"${it.nz ? ' checked' : ''}> na żądanie</label>` : ''}
+            ${dimCell(sd, i, multi)}</span>
           ${withTimes && i > 0 ? (() => {
             const tot = it.czas != null ? Math.round(it.czas * 60) : null;
             const m = tot != null ? Math.floor(tot / 60) : '', s = tot != null ? tot % 60 : '';
@@ -137,7 +154,10 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     el.closest('form')?.classList.add('dirty');
     draw();
   });
-  el.addEventListener('change', (e) => { if (e.target.dataset.nz !== undefined) items[+e.target.dataset.nz].nz = e.target.checked; });
+  el.addEventListener('change', (e) => {
+    if (e.target.dataset.nz !== undefined) items[+e.target.dataset.nz].nz = e.target.checked;
+    if (e.target.dataset.dim !== undefined) { items[+e.target.dataset.dim].wymiar = e.target.value; el.closest('form')?.classList.add('dirty'); draw(); }
+  });
   el.addEventListener('input', (e) => {
     const i = e.target.dataset.tm ?? e.target.dataset.ts;
     if (i === undefined) return;
@@ -161,7 +181,11 @@ function routeEditor(el, value, { withTimes = false } = {}) {
     draw();
   });
   draw();
-  return { get: () => items.map((it, i) => ({ stacja: it.stacja, czas: i > 0 && it.czas != null && !isNaN(it.czas) ? it.czas : null, nz: !!it.nz })) };
+  return { get: () => {
+    const sd = U.segDims(items, getSt);
+    // Ręczny wymiar zapisujemy tylko tam, gdzie jest potrzebny (odcinek między dwiema stacjami portalowymi).
+    return items.map((it, i) => ({ stacja: it.stacja, czas: i > 0 && it.czas != null && !isNaN(it.czas) ? it.czas : null, nz: !!it.nz, wymiar: i > 0 && sd.ambiguous(i) ? sd.dims[i] : null }));
+  } };
 }
 
 // ---------- KOMUNIKATY ----------
@@ -409,7 +433,8 @@ function viewStacje() {
     return `<div class="row-item">
       <div class="ri-main"><div class="ri-badges"><span class="code">${esc(s.kod)}</span>${s.status !== 'czynna' ? `<span class="pill warn">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${ls.map((l) => U.lineChip(l)).join('')}</div>
         <a class="ri-title" href="#/stacja/${esc(s.id)}">${esc(s.nazwa)}</a>
-        <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')} · ${U.coordsText(s) || 'bez koordynatów'}</div></div>
+        <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')} · ${U.coordsText(s) || 'bez koordynatów'}</div>
+        ${s.portal && s.wymiar2 ? `<div class="muted small mono">🌀 ${esc(U.WYMIARY[s.wymiar2] || '')} · ${U.coordsText(U.side2(s)) || 'bez koordynatów'}</div>` : ''}</div>
       <div class="ri-actions"><a class="btn sm" href="#/stacja/${esc(s.id)}">Edytuj</a></div></div>`; }).join('')}</div>` : '<p class="empty">Brak stacji.</p>'}`);
 }
 
@@ -417,7 +442,8 @@ function formStacja(id) {
   const isNew = !id || id === 'nowa';
   const src = isNew ? null : byId('stacje', id);
   if (!isNew && !src) { app.innerHTML = `<div class="card center"><h1>Nie znaleziono stacji</h1><a class="btn" href="#/stacje">Wróć</a></div>`; return; }
-  const s = src || { nazwa: '', kod: '', x: null, y: null, z: null, wymiar: 'overworld', status: 'czynna', opis: '' };
+  const s = src || { nazwa: '', kod: '', x: null, y: null, z: null, wymiar: 'overworld', status: 'czynna', opis: '', portal: false, wymiar2: 'nether', x2: null, y2: null, z2: null };
+  const coordRow = (sfx, loc) => `<div class="f-row three">${['x', 'y', 'z'].map((k) => `<label class="f">${k.toUpperCase()}<input name="${k}${sfx}" type="number" step="any" value="${esc(loc[k] ?? '')}"></label>`).join('')}</div>${['x', 'y', 'z'].map((k) => err(k + sfx)).join('')}`;
   app.innerHTML = `
   <a class="back" href="#/stacje">← Stacje</a>
   <h1>${isNew ? 'Nowa stacja' : 'Edycja stacji'}</h1>
@@ -427,17 +453,21 @@ function formStacja(id) {
       <label class="f">Nazwa *<input name="nazwa" maxlength="60" value="${esc(s.nazwa)}" placeholder="np. Centralna">${err('nazwa')}</label>
       <label class="f narrow-f">Kod *<input name="kod" maxlength="5" value="${esc(s.kod)}" placeholder="CEN" class="upper">${err('kod')}</label>
     </div>
-    <fieldset class="f"><legend>Koordynaty <span class="muted small">(opcjonalnie — wciśnij F3 w grze)</span></legend>
-      <div class="f-row three">
-        <label class="f">X<input name="x" type="number" step="any" value="${esc(s.x ?? '')}"></label>
-        <label class="f">Y<input name="y" type="number" step="any" value="${esc(s.y ?? '')}"></label>
-        <label class="f">Z<input name="z" type="number" step="any" value="${esc(s.z ?? '')}"></label>
-      </div>${err('x')}${err('y')}${err('z')}
-    </fieldset>
     <div class="f-row">
       <label class="f">Wymiar<select name="wymiar">${U.options(U.WYMIARY, s.wymiar)}</select></label>
       <label class="f">Status<select name="status">${U.options(U.STACJA_STATUS, s.status)}</select></label>
     </div>
+    <fieldset class="f"><legend>Koordynaty <span class="muted small">(opcjonalnie — wciśnij F3 w grze)</span></legend>${coordRow('', s)}</fieldset>
+    <label class="chk-line"><input type="checkbox" name="portal"${s.portal ? ' checked' : ''}> 🌀 Stacja portalowa — ma drugą stronę w innym wymiarze</label>
+    <fieldset class="f portal-box" id="portal-box"${s.portal ? '' : ' hidden'}>
+      <legend>Druga strona portalu</legend>
+      <p class="hint">Jedna stacja, dwa perony po obu stronach portalu. Linie mogą przejeżdżać przez nią z jednego wymiaru do drugiego, a pasażerowie przesiadać się między wymiarami.</p>
+      <div class="f-row">
+        <label class="f">Wymiar<select name="wymiar2">${U.options(U.WYMIARY, s.wymiar2 || 'nether')}</select>${err('wymiar2')}</label>
+        <div class="f"><span>&nbsp;</span><button type="button" class="btn sm" id="conv">Przelicz z pierwszej strony (×8 / ÷8)</button></div>
+      </div>
+      ${coordRow('2', U.side2(s))}
+    </fieldset>
     <label class="f">Opis<textarea name="opis" rows="3" maxlength="2000" placeholder="np. perony, przesiadki, co jest w okolicy">${esc(s.opis)}</textarea></label>
     <div class="form-actions">
       <button class="btn primary" type="submit">${isNew ? 'Dodaj stację' : 'Zapisz zmiany'}</button>
@@ -447,16 +477,35 @@ function formStacja(id) {
   </form>`;
   const form = app.querySelector('form');
   trackDirty(form);
+  form.portal.addEventListener('change', () => { form.querySelector('#portal-box').hidden = !form.portal.checked; });
+  // Nether ↔ Overworld: współrzędne poziome ×8 / ÷8, wysokość bez zmian.
+  form.querySelector('#conv').addEventListener('click', () => {
+    const w1 = form.wymiar.value, w2 = form.wymiar2.value;
+    const f = w1 === 'overworld' && w2 === 'nether' ? 1 / 8 : w1 === 'nether' && w2 === 'overworld' ? 8 : null;
+    if (f === null) { toast('Przeliczanie działa tylko między Overworldem a Netherem', 'bad'); return; }
+    if (form.x.value !== '') form.x2.value = Math.round(Number(form.x.value) * f);
+    if (form.z.value !== '') form.z2.value = Math.round(Number(form.z.value) * f);
+    if (form.y2.value === '' && form.y.value !== '') form.y2.value = form.y.value;
+    form.classList.add('dirty');
+  });
   form.onsubmit = async (e) => {
     e.preventDefault();
     // Puste pole = brak koordynatu; ułamki zaokrąglamy do pełnych kratek.
     const num = (el) => (el.value.trim() === '' ? null : Math.round(Number(el.value)));
-    const d = { nazwa: form.nazwa.value.trim(), kod: form.kod.value.trim().toUpperCase(), x: num(form.x), y: num(form.y), z: num(form.z), wymiar: form.wymiar.value, status: form.status.value, opis: form.opis.value.trim() };
+    const portal = form.portal.checked;
+    const d = {
+      nazwa: form.nazwa.value.trim(), kod: form.kod.value.trim().toUpperCase(),
+      x: num(form.x), y: num(form.y), z: num(form.z), wymiar: form.wymiar.value, status: form.status.value, opis: form.opis.value.trim(),
+      portal,
+      wymiar2: portal ? form.wymiar2.value : null,
+      x2: portal ? num(form.x2) : null, y2: portal ? num(form.y2) : null, z2: portal ? num(form.z2) : null,
+    };
     const errs = {};
     if (!d.nazwa) errs.nazwa = 'Podaj nazwę stacji.';
     if (!/^[A-Z0-9]{2,5}$/.test(d.kod)) errs.kod = 'Kod: 2–5 liter lub cyfr, np. CEN.';
     else if (state.stacje.some((x) => x.id !== src?.id && x.kod === d.kod)) errs.kod = `Kod ${d.kod} jest już zajęty.`;
-    for (const k of ['x', 'y', 'z']) if (d[k] !== null && !Number.isFinite(d[k])) errs[k] = `${k.toUpperCase()} musi być liczbą.`;
+    for (const k of ['x', 'y', 'z', 'x2', 'y2', 'z2']) if (d[k] != null && !Number.isFinite(d[k])) errs[k] = `${k[0].toUpperCase()} musi być liczbą.`;
+    if (portal && d.wymiar2 === d.wymiar) errs.wymiar2 = 'Druga strona portalu musi być w innym wymiarze niż pierwsza.';
     if (!setErrors(form, errs)) return;
     await busy(form.querySelector('[type="submit"]'), async () => {
       try {

@@ -128,6 +128,9 @@ function viewLinia(id) {
   const [c, t] = lineState(l, all.filter((k) => k._s === 'aktywny'));
   const trasa = (l.trasa || []).filter((x) => byId('stacje', x.stacja));
   const total = trasa.reduce((s, x, i) => s + (i > 0 && x.czas ? Number(x.czas) : 0), 0);
+  const sd = U.segDims(trasa, (sid) => byId('stacje', sid));
+  const dimList = [...new Set(sd.dims.filter(Boolean))];
+  const multiDim = dimList.some((d) => d !== 'overworld');
   const cur = mine.filter((k) => k._s !== 'zakonczony').sort(sortCurrent);
   const ended = mine.filter((k) => k._s === 'zakonczony').sort((a, b) => (b.do || b.od) - (a.do || a.od));
 
@@ -136,7 +139,7 @@ function viewLinia(id) {
   <header class="line-head" style="--lc:${U.safeColor(l.kolor)}">
     <div>${U.lineChip(l)} <span class="pill ${c}">${t}</span></div>
     <h1>${esc(l.opis || l.nazwa)}</h1>
-    <p class="muted">${esc(U.LINIA_TYPY[l.typ] || '')} · ${trasa.length} stacji${U.fmtDur(total) ? ` · ok. ${U.fmtDur(total)} przejazdu` : ''}</p>
+    <p class="muted">${esc(U.LINIA_TYPY[l.typ] || '')} · ${trasa.length} stacji${U.fmtDur(total) ? ` · ok. ${U.fmtDur(total)} przejazdu` : ''}${multiDim ? ` · przez ${dimList.map((d) => `${U.DIM_ICON[d]} ${U.WYMIARY[d]}`).join(', ')}` : ''}</p>
   </header>
   ${wholeLine.length ? `<div class="alert warn">⚠ Utrudnienia na całej linii: ${wholeLine.map((k) => `<a href="#/komunikat/${esc(k.id)}">${esc(k.tytul)}</a>`).join(', ')}</div>` : ''}
   <div class="two-col">
@@ -147,13 +150,18 @@ function viewLinia(id) {
         const others = state.linie.filter((o) => o.id !== l.id && (o.trasa || []).some((t) => t.stacja === s.id));
         const hit = hitSt.has(s.id);
         const closed = s.status !== 'czynna';
-        return `<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${x.nz ? ' nz' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}">
+        // Zmiana wymiaru między odcinkami = przejazd przez portal na poprzedniej stacji.
+        const portalRow = i > 1 && sd.dims[i] && sd.dims[i - 1] && sd.dims[i] !== sd.dims[i - 1]
+          ? `<li class="portal-row seg-${sd.dims[i]}">🌀 przez portal: ${U.DIM_ICON[sd.dims[i - 1]]} ${U.WYMIARY[sd.dims[i - 1]]} → ${U.DIM_ICON[sd.dims[i]]} ${U.WYMIARY[sd.dims[i]]}</li>` : '';
+        const segCls = multiDim && sd.dims[i + 1] ? ` seg-${sd.dims[i + 1]}` : '';
+        return `${portalRow}<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${x.nz ? ' nz' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}${segCls}">
           <span class="dot"></span>
           <div class="stop-body">
             <div><a href="#/stacja/${esc(s.id)}" class="stop-name">${esc(s.nazwa)}</a> <span class="code">${esc(s.kod)}</span>
             ${i > 0 && U.fmtDur(x.czas) ? `<span class="muted small">+${U.fmtDur(x.czas)}</span>` : ''}</div>
-            <div class="stop-extra">${x.nz ? '<span class="nz-tag" title="Pociąg zatrzymuje się tylko na żądanie">✋ na żądanie</span>' : ''}${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
-          </div></li>`; }).join('')}</ol>` : '<p class="empty">Trasa nie jest jeszcze ustalona.</p>'}
+            <div class="stop-extra">${s.portal ? `<span class="dim-b portal" title="Stacja portalowa">🌀 ${esc(U.dimsLabel(s))}</span>` : multiDim ? `<span class="dim-b">${U.DIM_ICON[s.wymiar] || ''} ${esc(U.WYMIARY[s.wymiar] || '')}</span>` : ''}${x.nz ? '<span class="nz-tag" title="Pociąg zatrzymuje się tylko na żądanie">✋ na żądanie</span>' : ''}${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
+          </div></li>`; }).join('')}</ol>
+      ${multiDim ? '<p class="muted small schema-legend">Linia ciągła — Overworld, przerywana — Nether/End.</p>' : ''}` : '<p class="empty">Trasa nie jest jeszcze ustalona.</p>'}
     </section>
     <section>
       <h2 class="sec">Komunikaty <span class="count">${cur.length}</span></h2>
@@ -173,6 +181,7 @@ function viewStacje() {
     return `<a class="card st-card" href="#/stacja/${esc(s.id)}">
       <div class="st-top"><b>${esc(s.nazwa)}</b> <span class="code">${esc(s.kod)}</span>${s.status !== 'czynna' ? `<span class="pill warn">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}</div>
       <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')}${U.coordsText(s) ? ' · ' + U.coordsText(s) : ''}</div>
+      ${s.portal && s.wymiar2 ? `<div class="muted small mono">🌀 ${esc(U.WYMIARY[s.wymiar2] || '')}${U.coordsText(U.side2(s)) ? ' · ' + U.coordsText(U.side2(s)) : ''}</div>` : ''}
       <div class="chips">${ls.map((l) => U.lineChip(l)).join('')}</div></a>`; }).join('')}</div>` : '<p class="empty">Brak stacji.</p>'}`;
 }
 
@@ -183,24 +192,32 @@ function viewStacja(id) {
   const lids = new Set(ls.map((l) => l.id));
   const rel = withStatus().filter((k) => k._s !== 'zakonczony' &&
     ((k.stacje || []).includes(id) || (!(k.stacje || []).length && (k.linie || []).some((l) => lids.has(l))))).sort(sortCurrent);
-  const [hx, hy, hz] = ['x', 'y', 'z'].map((k) => U.hasCoord(s[k]));
-  const tp = hx && hy && hz ? `/tp ${s.x} ${s.y} ${s.z}` : '';
-  let conv = '';
-  if (hx && hz && s.wymiar === 'nether') conv = `W Overworldzie ≈ X ${Math.round(s.x * 8)}, Z ${Math.round(s.z * 8)}`;
-  if (hx && hz && s.wymiar === 'overworld') conv = `W Netherze ≈ X ${Math.round(s.x / 8)}, Z ${Math.round(s.z / 8)}`;
-  const coords = ['x', 'y', 'z'].filter((k) => U.hasCoord(s[k]));
+  // Jedna lokalizacja (albo dwie dla stacji portalowej): koordynaty, komenda teleportu, przeliczenie Nether/Overworld.
+  const locBlock = (loc, title) => {
+    const coords = ['x', 'y', 'z'].filter((k) => U.hasCoord(loc[k]));
+    const tp = U.tpCommand(loc);
+    let conv = '';
+    if (!s.portal && U.hasCoord(loc.x) && U.hasCoord(loc.z)) {
+      if (loc.wymiar === 'nether') conv = `W Overworldzie ≈ X ${Math.round(loc.x * 8)}, Z ${Math.round(loc.z * 8)}`;
+      if (loc.wymiar === 'overworld') conv = `W Netherze ≈ X ${Math.round(loc.x / 8)}, Z ${Math.round(loc.z / 8)}`;
+    }
+    return `<div class="loc">
+      ${title ? `<h3 class="loc-t">${U.DIM_ICON[loc.wymiar] || ''} ${esc(U.WYMIARY[loc.wymiar] || '')}</h3>` : ''}
+      ${coords.length ? `<div class="coords mono">${coords.map((k) => `<span>${k.toUpperCase()} <b>${esc(loc[k])}</b></span>`).join('')}</div>` : '<p class="muted">Koordynaty nie zostały podane.</p>'}
+      ${tp ? `<button class="btn sm" data-copy="${esc(tp)}" title="${esc(tp)}">📋 Kopiuj komendę teleportu</button>` : ''}
+      ${conv ? `<p class="muted small">${conv}</p>` : ''}
+    </div>`;
+  };
   return `
   <a class="back" href="#/stacje">← Wszystkie stacje</a>
   <header class="st-head">
     <h1>${esc(s.nazwa)} <span class="code big">${esc(s.kod)}</span></h1>
-    <p><span class="pill ${s.status === 'czynna' ? 'ok' : 'warn'}">${esc(U.STACJA_STATUS[s.status] || '')}</span> <span class="muted">${esc(U.WYMIARY[s.wymiar] || '')}</span></p>
+    <p><span class="pill ${s.status === 'czynna' ? 'ok' : 'warn'}">${esc(U.STACJA_STATUS[s.status] || '')}</span> ${s.portal ? '<span class="dim-b portal">🌀 stacja portalowa</span>' : ''} <span class="muted">${esc(U.dimsLabel(s))}</span></p>
   </header>
   <div class="two-col">
     <section class="card">
       <h2 class="sec-s">Położenie</h2>
-      ${coords.length ? `<div class="coords mono">${coords.map((k) => `<span>${k.toUpperCase()} <b>${esc(s[k])}</b></span>`).join('')}</div>` : '<p class="muted">Koordynaty nie zostały podane.</p>'}
-      ${tp ? `<button class="btn sm" data-copy="${esc(tp)}">📋 Kopiuj <code>${esc(tp)}</code></button>` : ''}
-      ${conv ? `<p class="muted small">${conv}</p>` : ''}
+      ${s.portal && s.wymiar2 ? `<div class="locs">${locBlock(s, true)}${locBlock(U.side2(s), true)}</div>` : locBlock(s, false)}
       ${s.opis ? `<div class="md">${U.md(s.opis)}</div>` : ''}
       <h2 class="sec-s">Linie</h2>
       ${ls.length ? `<div class="chips">${ls.map((l) => {
@@ -288,7 +305,14 @@ function findConnections(from, to) {
   const active = withStatus(now).filter((k) => k._s === 'aktywny');
   const best = new Map();
   for (const legs of found) {
-    const L = legs.map((g) => ({ ...g, ...legInfo(g.tr, g.i, g.j) }));
+    const L = legs.map((g) => {
+      const info = legInfo(g.tr, g.i, g.j);
+      // Wymiary, przez które jedzie ten odcinek (segment k = z k-1 do k).
+      const sd = U.segDims(g.tr, (sid) => byId('stacje', sid));
+      // Kolejne wymiary bez powtórzeń obok siebie, np. Overworld → Nether → Overworld.
+      const dims = info.idx.slice(1).map((k, n) => sd.dims[Math.max(k, info.idx[n])]).filter((d, n, a) => d && d !== a[n - 1]);
+      return { ...g, ...info, dims };
+    });
     const sum = L.reduce((s, g) => s + g.sum, 0);
     const unknown = L.reduce((s, g) => s + g.unknown, 0);
     const xfers = L.length - 1;
@@ -329,9 +353,11 @@ function connCard(c, isFastest) {
     const term = g.dir > 0 ? g.tr[g.tr.length - 1] : g.tr[0];
     const mid = g.idx.slice(1, -1);
     const legT = g.unknown ? (g.sum ? `min. ${U.fmtDur(g.sum)}` : '? min') : U.fmtDur(g.sum) || '—';
-    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b> <span class="small">· ${U.fmtDur(XFER_COST)}</span></li>` : ''}
+    const prev = c.legs[n - 1];
+    const dimChange = n > 0 && prev.dims.length && g.dims.length && prev.dims[prev.dims.length - 1] !== g.dims[0];
+    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b>${dimChange ? ` <span class="dim-b portal">🌀 przez portal do: ${U.WYMIARY[g.dims[0]]}</span>` : ''} <span class="small">· ${U.fmtDur(XFER_COST)}</span></li>` : ''}
     <li class="leg" style="--lc:${U.safeColor(g.l.kolor)}">
-      <div class="leg-top">${U.lineChip(g.l, `#/linia/${g.l.id}`)}<span class="muted small">kierunek ${stationName(term.stacja)}</span><span class="leg-t">${legT}</span></div>
+      <div class="leg-top">${U.lineChip(g.l, `#/linia/${g.l.id}`)}<span class="muted small">kierunek ${stationName(term.stacja)}</span>${g.dims.length > 1 || g.dims.some((d) => d !== 'overworld') ? `<span class="dim-b">${g.dims.map((d) => `${U.DIM_ICON[d]} ${U.WYMIARY[d]}`).join(' → ')}</span>` : ''}<span class="leg-t">${legT}</span></div>
       <div class="leg-st"><a href="#/stacja/${esc(fromId)}">${stationName(fromId)}</a> <span class="arr">→</span> <a href="#/stacja/${esc(toId)}">${stationName(toId)}</a>${g.tr[g.j].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}</div>
       ${mid.length ? `<details class="leg-stops"><summary>${mid.length} ${U.plural(mid.length, 'stacja', 'stacje', 'stacji')} po drodze</summary><ul>${mid.map((k) => `<li>${stationName(g.tr[k].stacja)}${g.tr[k].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}${U.fmtDur(g.tr[k].czas) ? ` <span class="muted small">+${U.fmtDur(g.tr[k].czas)}</span>` : ''}</li>`).join('')}</ul></details>` : ''}
       ${g.alerts.map((k) => `<a class="leg-alert sev-${esc(k.waznosc)}" href="#/komunikat/${esc(k.id)}">${(U.TYPY[k.typ] || U.TYPY.informacja).icon} ${esc(k.tytul)}</a>`).join('')}

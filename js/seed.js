@@ -13,9 +13,9 @@ export function seedData(autor = { uid: 'seed', nazwa: 'System' }) {
     st('fpn', 'Farma Północna', 'FPN', -150, 68, -980),
     st('ppn', 'Port Północny', 'PPN', 40, 63, -1650, { opis: 'Przesiadka na łodzie w stronę wysp.' }),
     st('lbr', 'Las Brzozowy', 'LBR', 520, 72, 180),
-    st('zam', 'Zamek', 'ZAM', 1100, 88, 260, { opis: 'Stacja pod dziedzińcem zamku.' }),
+    st('zam', 'Zamek', 'ZAM', 1100, 88, 260, { opis: 'Stacja pod dziedzińcem zamku, z portalem do Netheru.', portal: true, wymiar2: 'nether', x2: 138, y2: 70, z2: 33 }),
     st('lsz', 'Lodowe Szczyty', 'LSZ', 1750, 120, -90, { status: 'zamknieta', opis: 'Stacja górska — uważaj na zamarznięte kałuże.' }),
-    st('pus', 'Pustynia', 'PUS', -200, 66, 900),
+    st('pus', 'Pustynia', 'PUS', -200, 66, 900, { portal: true, wymiar2: 'nether', x2: -25, y2: 70, z2: 113, opis: 'Stacja portalowa — peron w Overworldzie i w Netherze.' }),
     st('kdi', 'Kopalnia Diamentów', 'KDI', -480, -52, 1500, { opis: 'Stacja podziemna na poziomie Y -52.' }),
     st('nhb', 'Nether Hub', 'NHB', 0, 100, 0, { wymiar: 'nether', opis: 'Nad portalem ze spawnu.' }),
     st('nft', 'Forteca Netheru', 'NFT', 230, 72, -310, { wymiar: 'nether', status: 'budowa' }),
@@ -26,6 +26,7 @@ export function seedData(autor = { uid: 'seed', nazwa: 'System' }) {
     { id: 's1', nazwa: 'S1', kolor: '#d62828', typ: 'osobowa', status: 'czynna', opis: 'Centralna – Port Północny', trasa: r(['cen'], ['wos', 3], ['fpn', 4], ['ppn', 5]) },
     { id: 's2', nazwa: 'S2', kolor: '#1d6fd6', typ: 'osobowa', status: 'czynna', opis: 'Centralna – Lodowe Szczyty', trasa: r(['cen'], ['lbr', 3], ['zam', 4], ['lsz', 6]).map((t) => (t.stacja === 'lbr' ? { ...t, nz: true } : t)) },
     { id: 'ic1', nazwa: 'IC Północ–Południe', kolor: '#f2a900', typ: 'ekspres', status: 'czynna', opis: 'Ekspres przez całą mapę', trasa: r(['ppn'], ['cen', 6], ['pus', 4], ['kdi', 3]) },
+    { id: 'ne', nazwa: 'NE', kolor: '#e85d04', typ: 'ekspres', status: 'czynna', opis: 'Nether Ekspres: Las Brzozowy – Kopalnia Diamentów', trasa: r(['lbr'], ['zam', 2], ['pus', 1.5], ['kdi', 1]) },
     { id: 'n1', nazwa: 'N1', kolor: '#7b2cbf', typ: 'metro', status: 'budowa', opis: 'Metro w Netherze', trasa: r(['nhb'], ['nft', 2]) },
   ];
 

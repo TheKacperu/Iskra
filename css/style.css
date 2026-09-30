@@ -220,6 +220,23 @@ input.invalid, select.invalid, textarea.invalid { border-color: var(--bad); back
 .st-line { display: inline-flex; align-items: center; gap: 4px; }
 .nz-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 600; color: var(--muted); margin-left: 8px; cursor: pointer; white-space: nowrap; }
 .nz-toggle input { width: auto; margin: 0; accent-color: var(--brand-2); }
+/* Wymiary i portale */
+.dim-b { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+.dim-b.portal { color: #9b5de5; border-color: #9b5de5; background: transparent; }
+.dim-b.warn { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+.dim-b select { width: auto; padding: 1px 4px; font-size: .75rem; }
+.name .dim-b { margin-left: 6px; }
+.stop.seg-nether::before, .stop.seg-end::before, .portal-row.seg-nether::before, .portal-row.seg-end::before {
+  background: repeating-linear-gradient(to bottom, var(--lc) 0 7px, transparent 7px 12px);
+}
+.portal-row { position: relative; padding: 2px 0 14px 34px; font-size: .82rem; font-weight: 700; color: #9b5de5; }
+.portal-row::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 6px; background: var(--lc); }
+.schema-legend { margin: 6px 0 0; }
+.locs { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 8px; }
+.loc-t { font-size: 1rem; margin: 0 0 6px; }
+.loc { margin-bottom: 8px; }
+.portal-box { border: 1px dashed #9b5de5; border-radius: 8px; padding: 12px; }
+.portal-box legend { padding: 0 6px; }
 .warn-tag.grey { color: var(--muted); background: var(--surface-2); }
 
 /* ===== Stacje ===== */
