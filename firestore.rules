@@ -22,9 +22,10 @@ service cloud.firestore {
       allow create, update: if isStaff()
         && request.resource.data.nazwa is string
         && request.resource.data.nazwa.size() > 0 && request.resource.data.nazwa.size() <= 60
-        && request.resource.data.x is int
-        && request.resource.data.y is int
-        && request.resource.data.z is int;
+        // Koordynaty są opcjonalne: liczba całkowita albo brak (null).
+        && (request.resource.data.get('x', null) == null || request.resource.data.x is int)
+        && (request.resource.data.get('y', null) == null || request.resource.data.y is int)
+        && (request.resource.data.get('z', null) == null || request.resource.data.z is int);
     }
 
     match /linie/{id} {

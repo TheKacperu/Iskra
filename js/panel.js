@@ -396,7 +396,7 @@ function viewStacje() {
     return `<div class="row-item">
       <div class="ri-main"><div class="ri-badges"><span class="code">${esc(s.kod)}</span>${s.status !== 'czynna' ? `<span class="pill warn">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${ls.map((l) => U.lineChip(l)).join('')}</div>
         <a class="ri-title" href="#/stacja/${esc(s.id)}">${esc(s.nazwa)}</a>
-        <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')} · X ${esc(s.x)} · Y ${esc(s.y)} · Z ${esc(s.z)}</div></div>
+        <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')} · ${U.coordsText(s) || 'bez koordynatów'}</div></div>
       <div class="ri-actions"><a class="btn sm" href="#/stacja/${esc(s.id)}">Edytuj</a></div></div>`; }).join('')}</div>` : '<p class="empty">Brak stacji.</p>'}`);
 }
 
@@ -404,7 +404,7 @@ function formStacja(id) {
   const isNew = !id || id === 'nowa';
   const src = isNew ? null : byId('stacje', id);
   if (!isNew && !src) { app.innerHTML = `<div class="card center"><h1>Nie znaleziono stacji</h1><a class="btn" href="#/stacje">Wróć</a></div>`; return; }
-  const s = src || { nazwa: '', kod: '', x: '', y: 64, z: '', wymiar: 'overworld', status: 'czynna', opis: '' };
+  const s = src || { nazwa: '', kod: '', x: null, y: null, z: null, wymiar: 'overworld', status: 'czynna', opis: '' };
   app.innerHTML = `
   <a class="back" href="#/stacje">← Stacje</a>
   <h1>${isNew ? 'Nowa stacja' : 'Edycja stacji'}</h1>
@@ -414,12 +414,12 @@ function formStacja(id) {
       <label class="f">Nazwa *<input name="nazwa" maxlength="60" value="${esc(s.nazwa)}" placeholder="np. Centralna">${err('nazwa')}</label>
       <label class="f narrow-f">Kod *<input name="kod" maxlength="5" value="${esc(s.kod)}" placeholder="CEN" class="upper">${err('kod')}</label>
     </div>
-    <fieldset class="f"><legend>Koordynaty * <span class="muted small">(wciśnij F3 w grze)</span></legend>
+    <fieldset class="f"><legend>Koordynaty <span class="muted small">(opcjonalnie — wciśnij F3 w grze)</span></legend>
       <div class="f-row three">
-        <label class="f">X<input name="x" type="number" step="1" value="${esc(s.x)}"></label>
-        <label class="f">Y<input name="y" type="number" step="1" value="${esc(s.y)}"></label>
-        <label class="f">Z<input name="z" type="number" step="1" value="${esc(s.z)}"></label>
-      </div>${err('x')}
+        <label class="f">X<input name="x" type="number" step="any" value="${esc(s.x ?? '')}"></label>
+        <label class="f">Y<input name="y" type="number" step="any" value="${esc(s.y ?? '')}"></label>
+        <label class="f">Z<input name="z" type="number" step="any" value="${esc(s.z ?? '')}"></label>
+      </div>${err('x')}${err('y')}${err('z')}
     </fieldset>
     <div class="f-row">
       <label class="f">Wymiar<select name="wymiar">${U.options(U.WYMIARY, s.wymiar)}</select></label>
@@ -436,14 +436,14 @@ function formStacja(id) {
   trackDirty(form);
   form.onsubmit = async (e) => {
     e.preventDefault();
-    const num = (v) => (v === '' || v == null ? NaN : Number(v));
-    const d = { nazwa: form.nazwa.value.trim(), kod: form.kod.value.trim().toUpperCase(), x: num(form.x.value), y: num(form.y.value), z: num(form.z.value), wymiar: form.wymiar.value, status: form.status.value, opis: form.opis.value.trim() };
+    // Puste pole = brak koordynatu; ułamki zaokrąglamy do pełnych kratek.
+    const num = (el) => (el.value.trim() === '' ? null : Math.round(Number(el.value)));
+    const d = { nazwa: form.nazwa.value.trim(), kod: form.kod.value.trim().toUpperCase(), x: num(form.x), y: num(form.y), z: num(form.z), wymiar: form.wymiar.value, status: form.status.value, opis: form.opis.value.trim() };
     const errs = {};
     if (!d.nazwa) errs.nazwa = 'Podaj nazwę stacji.';
     if (!/^[A-Z0-9]{2,5}$/.test(d.kod)) errs.kod = 'Kod: 2–5 liter lub cyfr, np. CEN.';
     else if (state.stacje.some((x) => x.id !== src?.id && x.kod === d.kod)) errs.kod = `Kod ${d.kod} jest już zajęty.`;
-    if (![d.x, d.y, d.z].every(Number.isInteger)) errs.x = 'Podaj koordynaty X, Y, Z jako liczby całkowite.';
-    else if (d.y < -64 || d.y > 320) errs.x = 'Y musi być w zakresie od -64 do 320.';
+    for (const k of ['x', 'y', 'z']) if (d[k] !== null && !Number.isFinite(d[k])) errs[k] = `${k.toUpperCase()} musi być liczbą.`;
     if (!setErrors(form, errs)) return;
     await busy(form.querySelector('[type="submit"]'), async () => {
       try {

@@ -172,7 +172,7 @@ function viewStacje() {
     const ls = state.linie.filter((l) => (l.trasa || []).some((t) => t.stacja === s.id)).sort(U.byName);
     return `<a class="card st-card" href="#/stacja/${esc(s.id)}">
       <div class="st-top"><b>${esc(s.nazwa)}</b> <span class="code">${esc(s.kod)}</span>${s.status !== 'czynna' ? `<span class="pill warn">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}</div>
-      <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')} · ${esc(s.x)} ${esc(s.y)} ${esc(s.z)}</div>
+      <div class="muted small mono">${esc(U.WYMIARY[s.wymiar] || '')}${U.coordsText(s) ? ' · ' + U.coordsText(s) : ''}</div>
       <div class="chips">${ls.map((l) => U.lineChip(l)).join('')}</div></a>`; }).join('')}</div>` : '<p class="empty">Brak stacji.</p>'}`;
 }
 
@@ -183,10 +183,12 @@ function viewStacja(id) {
   const lids = new Set(ls.map((l) => l.id));
   const rel = withStatus().filter((k) => k._s !== 'zakonczony' &&
     ((k.stacje || []).includes(id) || (!(k.stacje || []).length && (k.linie || []).some((l) => lids.has(l))))).sort(sortCurrent);
-  const tp = `/tp ${s.x} ${s.y} ${s.z}`;
+  const [hx, hy, hz] = ['x', 'y', 'z'].map((k) => U.hasCoord(s[k]));
+  const tp = hx && hy && hz ? `/tp ${s.x} ${s.y} ${s.z}` : '';
   let conv = '';
-  if (s.wymiar === 'nether') conv = `W Overworldzie ≈ X ${Math.round(s.x * 8)}, Z ${Math.round(s.z * 8)}`;
-  if (s.wymiar === 'overworld') conv = `W Netherze ≈ X ${Math.round(s.x / 8)}, Z ${Math.round(s.z / 8)}`;
+  if (hx && hz && s.wymiar === 'nether') conv = `W Overworldzie ≈ X ${Math.round(s.x * 8)}, Z ${Math.round(s.z * 8)}`;
+  if (hx && hz && s.wymiar === 'overworld') conv = `W Netherze ≈ X ${Math.round(s.x / 8)}, Z ${Math.round(s.z / 8)}`;
+  const coords = ['x', 'y', 'z'].filter((k) => U.hasCoord(s[k]));
   return `
   <a class="back" href="#/stacje">← Wszystkie stacje</a>
   <header class="st-head">
@@ -196,8 +198,8 @@ function viewStacja(id) {
   <div class="two-col">
     <section class="card">
       <h2 class="sec-s">Położenie</h2>
-      <div class="coords mono"><span>X <b>${esc(s.x)}</b></span><span>Y <b>${esc(s.y)}</b></span><span>Z <b>${esc(s.z)}</b></span></div>
-      <button class="btn sm" data-copy="${esc(tp)}">📋 Kopiuj <code>${esc(tp)}</code></button>
+      ${coords.length ? `<div class="coords mono">${coords.map((k) => `<span>${k.toUpperCase()} <b>${esc(s[k])}</b></span>`).join('')}</div>` : '<p class="muted">Koordynaty nie zostały podane.</p>'}
+      ${tp ? `<button class="btn sm" data-copy="${esc(tp)}">📋 Kopiuj <code>${esc(tp)}</code></button>` : ''}
       ${conv ? `<p class="muted small">${conv}</p>` : ''}
       ${s.opis ? `<div class="md">${U.md(s.opis)}</div>` : ''}
       <h2 class="sec-s">Linie</h2>

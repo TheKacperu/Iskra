@@ -57,7 +57,14 @@ export function fromLocalInput(v) {
   return isNaN(d) ? null : d;
 }
 
-export const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#6b7280');
+// Koordynaty są opcjonalne — każdy z X/Y/Z może być pusty (null).
+export const hasCoord = (v) => typeof v === 'number' && Number.isFinite(v);
+export function coordsText(s) {
+  const parts = ['x', 'y', 'z'].filter((k) => hasCoord(s[k])).map((k) => `${k.toUpperCase()} ${s[k]}`);
+  return esc(parts.join(' · '));
+}
+
+export const safeColor =(c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#6b7280');
 export function textOn(hex) {
   const c = safeColor(hex);
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255);
