@@ -257,6 +257,8 @@ input.invalid, select.invalid, textarea.invalid { border-color: var(--bad); back
   .conn-search .swap { justify-self: center; transform: none; }
 }
 .seg-sm { display: inline-flex; }
+.xfer-in { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.xfer-in input { width: 72px; padding: 5px 8px; }
 .seg-b { font: 600 .85rem var(--font); background: var(--surface); color: var(--text); border: 0; border-right: 1px solid var(--border); padding: 7px 12px; cursor: pointer; }
 .seg-b:last-child { border-right: 0; }
 .seg-b.on { background: var(--brand-2); color: #fff; }
