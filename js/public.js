@@ -240,7 +240,7 @@ function viewKomunikat(id) {
 // Linie jeżdżą w obie strony. Czas = suma wpisanych czasów odcinków; brakujące liczymy szacunkowo tylko do sortowania.
 const pf = { from: '', to: '', all: false, sort: 'czas' };
 const EST_SEG = 2;       // min — szacunek dla odcinka bez wpisanego czasu (tylko do sortowania)
-const XFER_COST = 1;     // min — „koszt” przesiadki przy sortowaniu
+const XFER_COST = 5 / 60; // min — czas na przesiadkę (5 s), doliczany do czasu trasy
 const MAX_XFER = 3;
 
 function legInfo(tr, i, j) {
@@ -316,9 +316,9 @@ function findConnections(from, to) {
 }
 
 function timeLabel(c) {
-  if (!c.unknown) return c.sum ? `ok. ${U.fmtDur(c.sum)}` : 'czas nieznany';
+  const t = c.sum + c.xfers * XFER_COST;
   if (!c.sum) return 'czas nieznany';
-  return `min. ${U.fmtDur(c.sum)}`;
+  return `${c.unknown ? 'min.' : 'ok.'} ${U.fmtDur(t)}`;
 }
 
 function connCard(c, isFastest) {
@@ -329,7 +329,7 @@ function connCard(c, isFastest) {
     const term = g.dir > 0 ? g.tr[g.tr.length - 1] : g.tr[0];
     const mid = g.idx.slice(1, -1);
     const legT = g.unknown ? (g.sum ? `min. ${U.fmtDur(g.sum)}` : '? min') : U.fmtDur(g.sum) || '—';
-    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b></li>` : ''}
+    return `${n > 0 ? `<li class="xfer">🔁 Przesiadka: <b>${stationName(fromId)}</b> <span class="small">· ${U.fmtDur(XFER_COST)}</span></li>` : ''}
     <li class="leg" style="--lc:${U.safeColor(g.l.kolor)}">
       <div class="leg-top">${U.lineChip(g.l, `#/linia/${g.l.id}`)}<span class="muted small">kierunek ${stationName(term.stacja)}</span><span class="leg-t">${legT}</span></div>
       <div class="leg-st"><a href="#/stacja/${esc(fromId)}">${stationName(fromId)}</a> <span class="arr">→</span> <a href="#/stacja/${esc(toId)}">${stationName(toId)}</a>${g.tr[g.j].nz ? ' <span class="nz-tag">✋ na żądanie</span>' : ''}</div>
@@ -362,7 +362,7 @@ function viewPolaczenia(param) {
   else if (pf.from && pf.to) {
     const r = findConnections(pf.from, pf.to);
     out = r.list.length
-      ? `<p class="muted small">Znaleziono ${r.total} ${U.plural(r.total, 'połączenie', 'połączenia', 'połączeń')}${r.total > r.list.length ? `, pokazuję ${r.list.length} najlepszych` : ''}. Czasy to suma czasów przejazdu wpisanych dla odcinków, bez czekania na pociąg i przesiadek.</p>
+      ? `<p class="muted small">Znaleziono ${r.total} ${U.plural(r.total, 'połączenie', 'połączenia', 'połączeń')}${r.total > r.list.length ? `, pokazuję ${r.list.length} najlepszych` : ''}. Czas trasy to suma czasów przejazdu wpisanych dla odcinków plus ${U.fmtDur(XFER_COST)} na każdą przesiadkę (bez czekania na pociąg).</p>
          <div class="stack">${r.list.map((c) => connCard(c, r.total > 1 && c === r.fastest && !c.unknown)).join('')}</div>`
       : `<p class="empty">Brak połączenia między tymi stacjami${pf.all ? '' : ' (pomijam linie zawieszone i w budowie — zaznacz opcję powyżej, żeby je uwzględnić)'}.</p>`;
   } else out = '<p class="empty">Wybierz stację początkową i docelową.</p>';
