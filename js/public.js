@@ -150,16 +150,20 @@ function viewLinia(id) {
         const others = state.linie.filter((o) => o.id !== l.id && (o.trasa || []).some((t) => t.stacja === s.id));
         const hit = hitSt.has(s.id);
         const closed = s.status !== 'czynna';
-        // Zmiana wymiaru między odcinkami = przejazd przez portal na poprzedniej stacji.
-        const portalRow = i > 1 && sd.dims[i] && sd.dims[i - 1] && sd.dims[i] !== sd.dims[i - 1]
-          ? `<li class="portal-row seg-${sd.dims[i]}">🌀 przez portal: ${U.DIM_ICON[sd.dims[i - 1]]} ${U.WYMIARY[sd.dims[i - 1]]} → ${U.DIM_ICON[sd.dims[i]]} ${U.WYMIARY[sd.dims[i]]}</li>` : '';
-        const segCls = multiDim && sd.dims[i + 1] ? ` seg-${sd.dims[i + 1]}` : '';
-        return `${portalRow}<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${x.nz ? ' nz' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}${segCls}">
+        // Wymiar przyjazdu (odcinek i) i odjazdu (odcinek i+1). Różne = pociąg przechodzi przez portal na tej stacji.
+        const arr = sd.dims[i], dep = sd.dims[i + 1];
+        const dW = (d) => `${U.DIM_ICON[d]} ${U.WYMIARY[d]}`;
+        let dimTag = '';
+        if (arr && dep && arr !== dep) dimTag = `<span class="dim-b portal" title="Pociąg przechodzi tu przez portal">🌀 przejście przez portal: ${dW(arr)} → ${dW(dep)}</span>`;
+        else if (s.portal && (dep || arr)) dimTag = `<span class="dim-b portal" title="Stacja portalowa (${esc(U.dimsLabel(s))}) — linia korzysta z tej strony">🌀 peron: ${dW(dep || arr)}</span>`;
+        else if (multiDim) dimTag = `<span class="dim-b">${dW(dep || arr || s.wymiar)}</span>`;
+        const segCls = multiDim && dep ? ` seg-${dep}` : '';
+        return `<li class="stop${hit ? ' hit' : ''}${closed ? ' closed' : ''}${x.nz ? ' nz' : ''}${i === 0 || i === trasa.length - 1 ? ' term' : ''}${segCls}">
           <span class="dot"></span>
           <div class="stop-body">
             <div><a href="#/stacja/${esc(s.id)}" class="stop-name">${esc(s.nazwa)}</a> <span class="code">${esc(s.kod)}</span>
             ${i > 0 && U.fmtDur(x.czas) ? `<span class="muted small">+${U.fmtDur(x.czas)}</span>` : ''}</div>
-            <div class="stop-extra">${s.portal ? `<span class="dim-b portal" title="Stacja portalowa">🌀 ${esc(U.dimsLabel(s))}</span>` : multiDim ? `<span class="dim-b">${U.DIM_ICON[s.wymiar] || ''} ${esc(U.WYMIARY[s.wymiar] || '')}</span>` : ''}${x.nz ? '<span class="nz-tag" title="Pociąg zatrzymuje się tylko na żądanie">✋ na żądanie</span>' : ''}${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
+            <div class="stop-extra">${dimTag}${x.nz ? '<span class="nz-tag" title="Pociąg zatrzymuje się tylko na żądanie">✋ na żądanie</span>' : ''}${hit ? '<span class="warn-tag">⚠ utrudnienia</span>' : ''}${closed ? `<span class="warn-tag grey">${esc(U.STACJA_STATUS[s.status])}</span>` : ''}${others.map((o) => U.lineChip(o, `#/linia/${o.id}`)).join('')}</div>
           </div></li>`; }).join('')}</ol>
       ${multiDim ? '<p class="muted small schema-legend">Linia ciągła — Overworld, przerywana — Nether/End.</p>' : ''}` : '<p class="empty">Trasa nie jest jeszcze ustalona.</p>'}
     </section>
