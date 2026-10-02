@@ -434,7 +434,23 @@ function setConnHash() {
 
 // ---------- mapa sieci ----------
 // Schemat liczy się sam z tras linii (js/map.js). Tu tylko widok: przybliżanie, przesuwanie, wyróżnienie linii.
-const mp = { focus: '', view: null, key: '' };
+const mp = { focus: '', view: null, key: '', full: false };
+
+// Pełny ekran: mapa zakrywa całe okno (klasa .map-full przetrwa odświeżanie widoku co minutę),
+// a tam, gdzie przeglądarka pozwala, dodatkowo chowamy paski przeglądarki (Fullscreen API).
+function setFull(on) {
+  if (mp.full === on) return;
+  mp.full = on;
+  document.body.classList.toggle('map-open', on);
+  try {
+    if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  } catch (e) {}
+  render();
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && mp.full) setFull(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mp.full) setFull(false); });
+window.addEventListener('hashchange', () => { if (mp.full && route().p !== 'mapa') setFull(false); });
 
 function currentMap() {
   const lay = mapLayout(state.stacje, state.linie);
@@ -465,9 +481,10 @@ function viewMapa(id) {
     <div class="map-dl"><button class="btn sm" data-mdl="png">⬇ PNG</button><button class="btn sm" data-mdl="svg">⬇ SVG</button></div>
   </div>
   <p class="muted small map-note">Schemat układa się sam z tras linii: północ jest u góry, odcinki biegną poziomo i pionowo. Kliknij stację, żeby zobaczyć szczegóły. Przybliżanie kółkiem myszy albo dwoma palcami.</p>
-  <section class="map-box" style="aspect-ratio:${Math.round(lay.bounds.w)} / ${Math.round(lay.bounds.h)}">
+  <section class="map-box${mp.full ? ' map-full' : ''}" style="aspect-ratio:${Math.round(lay.bounds.w)} / ${Math.round(lay.bounds.h)}">
     ${mapSvg(lay, { focus: mp.focus, hit, view: mp.view })}
     <div class="map-zoom">
+      <button class="btn icon" data-mz="full" title="${mp.full ? 'Zamknij pełny ekran (Esc)' : 'Pełny ekran'}" aria-label="${mp.full ? 'Zamknij pełny ekran' : 'Powiększ mapę na cały ekran'}" aria-pressed="${mp.full}">${mp.full ? '✕' : '⛶'}</button>
       <button class="btn icon" data-mz="in" title="Przybliż" aria-label="Przybliż">+</button>
       <button class="btn icon" data-mz="out" title="Oddal" aria-label="Oddal">−</button>
       <button class="btn icon" data-mz="fit" title="Cała sieć" aria-label="Pokaż całą sieć">⤢</button>
@@ -602,7 +619,7 @@ app.addEventListener('click', (e) => {
     render();
   }
   const mz = e.target.closest('[data-mz]');
-  if (mz) { if (mz.dataset.mz === 'fit') { mp.view = null; render(); } else zoomAt(mz.dataset.mz === 'in' ? 1 / 1.4 : 1.4); }
+  if (mz) { if (mz.dataset.mz === 'full') setFull(!mp.full); else if (mz.dataset.mz === 'fit') { mp.view = null; render(); } else zoomAt(mz.dataset.mz === 'in' ? 1 / 1.4 : 1.4); }
   const dl = e.target.closest('[data-mdl]');
   if (dl) downloadMap(dl.dataset.mdl);
 });
