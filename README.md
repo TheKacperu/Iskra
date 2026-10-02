@@ -10,7 +10,7 @@ Strona z informacjami o kolejkach na serwerze Minecraft. Pokazuje linie, trasy, 
 
 | Strona | Co robi |
 |---|---|
-| `index.html` | Publiczna: stan sieci, aktywne i nadchodzące utrudnienia z filtrami, wyszukiwarka połączeń (z przesiadkami i czasem przejazdu), linie ze schematem trasy, stacje z koordynatami (kopiowanie `/tp`), archiwum |
+| `index.html` | Publiczna: stan sieci, aktywne i nadchodzące utrudnienia z filtrami, wyszukiwarka połączeń (z przesiadkami i czasem przejazdu), mapa sieci rysowana automatycznie, linie ze schematem trasy, stacje z koordynatami (kopiowanie `/tp`), archiwum |
 | `panel.html` | Panel technika: komunikaty (dodaj, edytuj, duplikuj, zakończ, usuń), linie i trasy, stacje, użytkownicy (tylko admin), zmiana hasła |
 | `login.html` | Logowanie technika (login + hasło) |
 | `setup.html` | Jednorazowe utworzenie pierwszego administratora |
@@ -74,6 +74,17 @@ Przykład linii Overworld → Nether → Overworld: `Las Brzozowy (OW)` → `Zam
 - Wyszukiwarka połączeń pokazuje wymiary na każdym odcinku i przejście przez portal przy przesiadce.
 - Na stronie stacji portalowej są dwie komendy teleportu (`/execute in … run tp`), po jednej na każdy wymiar.
 
+### Mapa sieci
+
+Zakładka **Mapa** rysuje schemat całej sieci sama, z tras dodanych linii. Nic nie trzeba układać ręcznie: po dodaniu lub zmianie linii albo stacji mapa przelicza się od razu.
+
+- Stacje są rozmieszczane według koordynatów (północ u góry, Nether przeliczany ×8). Stacje bez koordynatów dostają miejsce z układu torów.
+- Odcinki biegną poziomo albo pionowo. Gdy linia musi skręcić, robi to pod kątem 90°.
+- Linie jadące tym samym odcinkiem są rysowane obok siebie. Ekspres, który omija stacje innej linii na tym samym torze, jedzie obok niej bez zatrzymania.
+- Przesiadki mają biały znacznik, odcinki w Netherze są przerywane, linie w budowie puste w środku, a zawieszone przygaszone. Stacje z aktywnymi utrudnieniami są czerwone.
+- Kliknięcie linii w legendzie wyróżnia ją na mapie (adres `#/mapa/<id linii>`, z przycisku „🗺 Pokaż na mapie” na stronie linii).
+- Mapę można przybliżać (kółko myszy, dwa palce, przyciski) i pobrać jako PNG lub SVG.
+
 Treść komunikatu obsługuje proste formatowanie: `**pogrubienie**`, `*kursywa*`, `- lista`, `[link](https://...)`.
 
 ## Podgląd lokalny
@@ -107,6 +118,7 @@ css/style.css
 js/config.js       ← Twoja konfiguracja Firebase
 js/api.js          ← warstwa danych (Firebase lub demo)
 js/public.js       ← strona publiczna
+js/map.js          ← automatyczny układ i rysowanie mapy sieci
 js/panel.js        ← panel technika
 js/auth-pages.js   ← logowanie i pierwszy admin
 js/util.js  js/common.js  js/seed.js

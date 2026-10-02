@@ -2,7 +2,8 @@
 import { getApi, errMsg } from './api.js';
 import { SITE_NAME } from './config.js';
 import * as U from './util.js';
-import { mountHeader, demoBanner, renderInto, route, copyText } from './common.js';
+import { mountHeader, demoBanner, renderInto, route, copyText, toast } from './common.js';
+import { mapLayout, mapSvg, mapFileSvg, svgToPng, resetMapCache } from './map.js';
 
 const { esc } = U;
 const app = document.getElementById('app');
@@ -137,7 +138,7 @@ function viewLinia(id) {
   return `
   <a class="back" href="#/linie">← Wszystkie linie</a>
   <header class="line-head" style="--lc:${U.safeColor(l.kolor)}">
-    <div>${U.lineChip(l)} <span class="pill ${c}">${t}</span></div>
+    <div>${U.lineChip(l)} <span class="pill ${c}">${t}</span> ${trasa.length > 1 ? `<a class="btn xs" href="#/mapa/${esc(l.id)}">🗺 Pokaż na mapie</a>` : ''}</div>
     <h1>${esc(l.opis || l.nazwa)}</h1>
     <p class="muted">${esc(U.LINIA_TYPY[l.typ] || '')} · ${trasa.length} stacji${U.fmtDur(total) ? ` · ok. ${U.fmtDur(total)} przejazdu` : ''}${multiDim ? ` · przez ${dimList.map((d) => `${U.DIM_ICON[d]} ${U.WYMIARY[d]}`).join(', ')}` : ''}</p>
   </header>
@@ -431,6 +432,140 @@ function setConnHash() {
   history.replaceState(null, '', `#/polaczenia/${encodeURIComponent(pf.from)}~${encodeURIComponent(pf.to)}`);
 }
 
+// ---------- mapa sieci ----------
+// Schemat liczy się sam z tras linii (js/map.js). Tu tylko widok: przybliżanie, przesuwanie, wyróżnienie linii.
+const mp = { focus: '', view: null, key: '' };
+
+function currentMap() {
+  const lay = mapLayout(state.stacje, state.linie);
+  if (lay.key !== mp.key) { mp.key = lay.key; mp.view = null; }
+  return lay;
+}
+
+function viewMapa(id) {
+  mp.focus = id && byId('linie', id) ? id : '';
+  const lay = currentMap();
+  if (!lay.lines.length) return `<h1>Mapa sieci</h1><p class="empty">Mapa pojawi się, gdy dodasz linię z trasą (co najmniej dwie stacje).</p>`;
+  const active = withStatus().filter((k) => k._s === 'aktywny');
+  const hit = new Set(active.flatMap((k) => k.stacje || []));
+  const linie = lay.lines.map((x) => byId('linie', x.id)).filter(Boolean);
+  const any = (fn) => lay.lines.some(fn);
+  const key = (svg, label) => `<span class="mk"><svg viewBox="0 0 34 16" width="34" height="16" aria-hidden="true">${svg}</svg>${label}</span>`;
+  const keys = [
+    key('<rect class="m-st ic" x="10" y="2" width="14" height="12" rx="6"/>', 'przesiadka'),
+    any((l) => l.pieces.some((p) => p.alt)) && key('<path class="m-trk alt" d="M2 8H32" stroke="var(--muted)"/>', 'odcinek w Netherze/Endzie'),
+    any((l) => l.status === 'budowa') && key('<path class="m-trk" d="M2 8H32" stroke="var(--muted)"/><path class="m-hollow" d="M2 8H32"/>', 'linia w budowie'),
+    any((l) => l.status === 'zawieszona') && key('<g class="m-susp"><path class="m-trk" d="M2 8H32" stroke="var(--muted)"/></g>', 'linia zawieszona'),
+    lay.stations.some((s) => s.portal) && key('<rect class="m-portal" x="9" y="1" width="16" height="14" rx="7"/><circle class="m-st dot" cx="17" cy="8" r="4" stroke="var(--muted)"/>', 'stacja portalowa'),
+    hit.size && key('<circle class="m-st dot hit" cx="17" cy="8" r="4.5"/>', 'utrudnienia na stacji'),
+  ].filter(Boolean);
+  return `
+  <div class="map-head">
+    <h1>Mapa sieci</h1>
+    <div class="map-dl"><button class="btn sm" data-mdl="png">⬇ PNG</button><button class="btn sm" data-mdl="svg">⬇ SVG</button></div>
+  </div>
+  <p class="muted small map-note">Schemat układa się sam z tras linii: północ jest u góry, odcinki biegną poziomo i pionowo. Kliknij stację, żeby zobaczyć szczegóły. Przybliżanie kółkiem myszy albo dwoma palcami.</p>
+  <section class="map-box" style="aspect-ratio:${Math.round(lay.bounds.w)} / ${Math.round(lay.bounds.h)}">
+    ${mapSvg(lay, { focus: mp.focus, hit, view: mp.view })}
+    <div class="map-zoom">
+      <button class="btn icon" data-mz="in" title="Przybliż" aria-label="Przybliż">+</button>
+      <button class="btn icon" data-mz="out" title="Oddal" aria-label="Oddal">−</button>
+      <button class="btn icon" data-mz="fit" title="Cała sieć" aria-label="Pokaż całą sieć">⤢</button>
+    </div>
+  </section>
+  <section class="card map-legend">
+    <div class="ml-lines">${linie.map((l) => {
+      const [c, t] = lineState(l, active);
+      return `<button class="ml-line${mp.focus === l.id ? ' on' : ''}" data-mfocus="${esc(l.id)}" title="${mp.focus === l.id ? 'Pokaż wszystkie linie' : 'Wyróżnij tę linię'}">${U.lineChip(l)}<span class="dot-s ${c}"></span><span class="small">${esc(t)}</span></button>`;
+    }).join('')}
+    ${mp.focus ? `<a class="btn sm" href="#/linia/${esc(mp.focus)}">Szczegóły linii →</a>` : ''}</div>
+    ${keys.length ? `<div class="ml-keys small muted">${keys.join('')}</div>` : ''}
+  </section>`;
+}
+
+// Przybliżanie i przesuwanie zmienia tylko viewBox — bez przerysowania strony.
+const mapEl = () => app.querySelector('.map-svg');
+const viewOf = (svg) => mp.view || (({ x, y, width: w, height: h }) => ({ x, y, w, h }))(svg.viewBox.baseVal);
+function setView(v) {
+  const svg = mapEl();
+  if (!svg) return;
+  mp.view = v;
+  svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+}
+// Skala ograniczona: od ok. 12× przybliżenia do 2× oddalenia względem całej sieci.
+function clampK(w0, k) {
+  const b = currentMap().bounds, minW = Math.max(b.w / 12, 120), maxW = b.w * 2;
+  return Math.min(Math.max(w0 * k, Math.min(minW, w0)), Math.max(maxW, w0)) / w0;
+}
+function zoomAt(f, cx, cy) {
+  const svg = mapEl();
+  if (!svg) return;
+  const v = viewOf(svg), r = svg.getBoundingClientRect();
+  const p = new DOMPoint(cx ?? r.left + r.width / 2, cy ?? r.top + r.height / 2).matrixTransform(svg.getScreenCTM().inverse());
+  const k = clampK(v.w, f);
+  setView({ x: p.x - (p.x - v.x) * k, y: p.y - (p.y - v.y) * k, w: v.w * k, h: v.h * k });
+}
+const ptrs = new Map();
+let gest = null, dragged = false;
+function startGesture(svg) {
+  const pts = [...ptrs.values()];
+  const mid = { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+  const d = pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0;
+  gest = { v: viewOf(svg), inv: svg.getScreenCTM().inverse(), mid, d };
+}
+app.addEventListener('pointerdown', (e) => {
+  const svg = e.target.closest('.map-svg');
+  if (!svg || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+  if (ptrs.size === 1) dragged = false;
+  startGesture(svg);
+});
+app.addEventListener('pointermove', (e) => {
+  const p = ptrs.get(e.pointerId), svg = mapEl();
+  if (!p || !svg || !gest) return;
+  p.x = e.clientX; p.y = e.clientY;
+  if (!dragged && Math.hypot(p.x - p.x0, p.y - p.y0) > 5) {
+    dragged = true;
+    try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+  if (!dragged) return;
+  const pts = [...ptrs.values()];
+  const mid = { x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length };
+  const k = gest.d && pts.length > 1 ? clampK(gest.v.w, gest.d / (Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1)) : 1;
+  // Punkt mapy, który był pod palcami na początku gestu, ma zostać pod nimi teraz.
+  const m0 = new DOMPoint(gest.mid.x, gest.mid.y).matrixTransform(gest.inv), m1 = new DOMPoint(mid.x, mid.y).matrixTransform(gest.inv);
+  setView({ x: m0.x - (m1.x - gest.v.x) * k, y: m0.y - (m1.y - gest.v.y) * k, w: gest.v.w * k, h: gest.v.h * k });
+});
+const endPtr = (e) => {
+  if (!ptrs.delete(e.pointerId)) return;
+  const svg = mapEl();
+  if (ptrs.size && svg) startGesture(svg); else gest = null;
+};
+app.addEventListener('pointerup', endPtr);
+app.addEventListener('pointercancel', endPtr);
+// Po przeciągnięciu mapy puszczenie przycisku nie otwiera stacji.
+app.addEventListener('click', (e) => { if (dragged && e.target.closest('.map-svg')) { e.preventDefault(); e.stopPropagation(); dragged = false; } }, true);
+app.addEventListener('wheel', (e) => {
+  if (!e.target.closest('.map-svg')) return;
+  e.preventDefault();
+  zoomAt(Math.exp((e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * 0.0015), e.clientX, e.clientY);
+}, { passive: false });
+
+async function downloadMap(type) {
+  const svg = mapEl();
+  if (!svg) return;
+  const lay = currentMap();
+  const text = mapFileSvg(svg, lay);
+  try {
+    const blob = type === 'png' ? await svgToPng(text, lay.bounds.w, lay.bounds.h) : new Blob([text], { type: 'image/svg+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `mapa-${SITE_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.${type}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (err) { toast('Nie udało się zapisać mapy.', 'bad'); }
+}
+
 const notFound = (msg) => `<div class="card center"><h1>Nie znaleziono</h1><p>${msg}</p><a class="btn" href="#/">Strona główna</a></div>`;
 
 // ---------- render ----------
@@ -438,7 +573,7 @@ function render() {
   if (state.error) { app.innerHTML = `<div class="alert bad">Nie udało się wczytać danych. ${esc(errMsg(state.error))}</div>`; return; }
   if (!['stacje', 'linie', 'komunikaty'].every((c) => state.ready[c])) { app.innerHTML = '<p class="loading">Ładowanie…</p>'; return; }
   const { p, id } = route();
-  const views = { '': viewHome, polaczenia: () => viewPolaczenia(id), linie: viewLinie, linia: () => viewLinia(id), stacje: viewStacje, stacja: () => viewStacja(id), archiwum: viewArchiwum, komunikat: () => viewKomunikat(id) };
+  const views = { '': viewHome, polaczenia: () => viewPolaczenia(id), mapa: () => viewMapa(id), linie: viewLinie, linia: () => viewLinia(id), stacje: viewStacje, stacja: () => viewStacja(id), archiwum: viewArchiwum, komunikat: () => viewKomunikat(id) };
   renderInto(app, (views[p] || (() => notFound('Nie ma takiej strony.')))());
 }
 
@@ -460,6 +595,16 @@ app.addEventListener('click', (e) => {
   const so = e.target.closest('[data-sort]');
   if (so) { pf.sort = so.dataset.sort; render(); }
   if (e.target.closest('[data-clear]')) { Object.assign(f, { linia: '', typ: '', status: 'biezace', q: '' }); render(); }
+  const mf = e.target.closest('[data-mfocus]');
+  if (mf) {
+    const id = mp.focus === mf.dataset.mfocus ? '' : mf.dataset.mfocus;
+    history.replaceState(null, '', `#/mapa${id ? '/' + encodeURIComponent(id) : ''}`);
+    render();
+  }
+  const mz = e.target.closest('[data-mz]');
+  if (mz) { if (mz.dataset.mz === 'fit') { mp.view = null; render(); } else zoomAt(mz.dataset.mz === 'in' ? 1 / 1.4 : 1.4); }
+  const dl = e.target.closest('[data-mdl]');
+  if (dl) downloadMap(dl.dataset.mdl);
 });
 
 async function main() {
@@ -471,6 +616,8 @@ async function main() {
     api.subscribe(col, (docs) => { state[col] = docs; state.ready[col] = true; render(); }, (err) => { state.error = err; render(); });
   }
   window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+  // Podpisy na mapie rozmieszczamy według szerokości tekstu — po wczytaniu fontu liczymy je od nowa.
+  document.fonts?.ready.then(() => { resetMapCache(); if (route().p === 'mapa') render(); });
   // Zegar co 15 s, pełne odświeżenie co minutę (statusy zmieniają się z upływem czasu).
   setInterval(() => { const c = document.getElementById('clock'); if (c) c.textContent = U.fmtTime(new Date()); }, 15000);
   setInterval(render, 60000);
