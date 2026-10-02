@@ -778,7 +778,7 @@ export function mapSvg(lay, { focus = '', hit = new Set(), view = null } = {}) {
     const lbl = `<text class="m-lbl${s.status !== 'czynna' ? ' closed' : ''}" text-anchor="${L.anchor}">${L.parts.map((t, j) => `<tspan x="${L.x}" y="${L.ys[j]}">${esc(t)}</tspan>`).join('')}</text>`;
     const dim = focus && !s.lineIds.includes(focus) ? ' dim' : '';
     const title = `${s.name}${s.kod ? ` (${s.kod})` : ''}${s.status !== 'czynna' ? ` — ${U.STACJA_STATUS[s.status] || s.status}` : ''}`;
-    return `<a class="m-st-a${dim}" href="#/stacja/${esc(s.id)}"><title>${esc(title)}</title>${portal}${mk}${lbl}</a>`;
+    return `<a class="m-st-a${dim}" href="#/stacja/${esc(s.id)}" data-st="${esc(s.id)}" aria-label="${esc(title)}">${portal}${mk}${lbl}</a>`;
   }).join('');
   return `<svg class="map-svg" xmlns="http://www.w3.org/2000/svg" viewBox="${b.x} ${b.y} ${b.w} ${b.h}" role="img" aria-label="Mapa sieci"><g class="m-lines">${linesSvg}</g><g class="m-sts">${stSvg}</g></svg>`;
 }

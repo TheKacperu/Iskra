@@ -434,7 +434,9 @@ function setConnHash() {
 
 // ---------- mapa sieci ----------
 // Schemat liczy się sam z tras linii (js/map.js). Tu tylko widok: przybliżanie, przesuwanie, wyróżnienie linii.
-const mp = { focus: '', view: null, key: '', full: false };
+// Legenda leży na mapie w rogu; na wąskim ekranie startuje zwinięta, żeby nie zasłaniać schematu.
+const mp = { focus: '', view: null, key: '', full: false, legend: matchMedia('(min-width: 700px)').matches };
+app.addEventListener('toggle', (e) => { if (e.target.classList?.contains('map-legend')) { mp.legend = e.target.open; fitMap(); } }, true);
 
 // Pełny ekran: mapa zakrywa całe okno (klasa .map-full przetrwa odświeżanie widoku co minutę),
 // a tam, gdzie przeglądarka pozwala, dodatkowo chowamy paski przeglądarki (Fullscreen API).
@@ -481,22 +483,24 @@ function viewMapa(id) {
     <div class="map-dl"><button class="btn sm" data-mdl="png">⬇ PNG</button><button class="btn sm" data-mdl="svg">⬇ SVG</button></div>
   </div>
   <p class="muted small map-note">Schemat układa się sam z tras linii: północ jest u góry, odcinki biegną poziomo i pionowo. Kliknij stację, żeby zobaczyć szczegóły. Przybliżanie kółkiem myszy albo dwoma palcami.</p>
-  <section class="map-box${mp.full ? ' map-full' : ''}" style="aspect-ratio:${Math.round(lay.bounds.w)} / ${Math.round(lay.bounds.h)}">
+  <section class="map-box${mp.full ? ' map-full' : ''}">
     ${mapSvg(lay, { focus: mp.focus, hit, view: mp.view })}
+    <div class="map-tip" role="tooltip" hidden></div>
+    <details class="map-legend"${mp.legend ? ' open' : ''}>
+      <summary>Legenda</summary>
+      <div class="ml-lines">${linie.map((l) => {
+        const [c, t] = lineState(l, active);
+        return `<button class="ml-line${mp.focus === l.id ? ' on' : ''}" data-mfocus="${esc(l.id)}" title="${mp.focus === l.id ? 'Pokaż wszystkie linie' : 'Wyróżnij tę linię'}">${U.lineChip(l)}<span class="dot-s ${c}"></span><span class="small">${esc(t)}</span></button>`;
+      }).join('')}</div>
+      ${mp.focus ? `<a class="btn xs" href="#/linia/${esc(mp.focus)}">Szczegóły linii →</a>` : ''}
+      ${keys.length ? `<div class="ml-keys small muted">${keys.join('')}</div>` : ''}
+    </details>
     <div class="map-zoom">
       <button class="btn icon" data-mz="full" title="${mp.full ? 'Zamknij pełny ekran (Esc)' : 'Pełny ekran'}" aria-label="${mp.full ? 'Zamknij pełny ekran' : 'Powiększ mapę na cały ekran'}" aria-pressed="${mp.full}">${mp.full ? '✕' : '⛶'}</button>
       <button class="btn icon" data-mz="in" title="Przybliż" aria-label="Przybliż">+</button>
       <button class="btn icon" data-mz="out" title="Oddal" aria-label="Oddal">−</button>
       <button class="btn icon" data-mz="fit" title="Cała sieć" aria-label="Pokaż całą sieć">⤢</button>
     </div>
-  </section>
-  <section class="card map-legend">
-    <div class="ml-lines">${linie.map((l) => {
-      const [c, t] = lineState(l, active);
-      return `<button class="ml-line${mp.focus === l.id ? ' on' : ''}" data-mfocus="${esc(l.id)}" title="${mp.focus === l.id ? 'Pokaż wszystkie linie' : 'Wyróżnij tę linię'}">${U.lineChip(l)}<span class="dot-s ${c}"></span><span class="small">${esc(t)}</span></button>`;
-    }).join('')}
-    ${mp.focus ? `<a class="btn sm" href="#/linia/${esc(mp.focus)}">Szczegóły linii →</a>` : ''}</div>
-    ${keys.length ? `<div class="ml-keys small muted">${keys.join('')}</div>` : ''}
   </section>`;
 }
 
@@ -509,6 +513,20 @@ function setView(v) {
   mp.view = v;
   svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
 }
+// Widok „cała sieć”: mieści schemat w ramce, nie powiększa go ponad 1,4× (mała sieć nie robi się ogromna)
+// i odsuwa go od otwartej legendy w lewym dolnym rogu. Nie zapamiętujemy go — liczy się od nowa po zmianie rozmiaru.
+function fitMap() {
+  const svg = mapEl();
+  if (!svg || mp.view) return;
+  const b = currentMap().bounds, cw = svg.clientWidth, ch = svg.clientHeight;
+  if (!cw || !ch) return;
+  const lg = app.querySelector('.map-legend[open]');
+  const reserve = lg && lg.offsetWidth < cw / 2 ? lg.offsetWidth + 16 : 0;
+  const aw = cw - reserve, k = Math.min(aw / b.w, ch / b.h, 1.4);
+  const w = cw / k, h = ch / k;
+  svg.setAttribute('viewBox', `${b.x - reserve / k - (aw / k - b.w) / 2} ${b.y - (h - b.h) / 2} ${w} ${h}`);
+}
+window.addEventListener('resize', fitMap);
 // Skala ograniczona: od ok. 12× przybliżenia do 2× oddalenia względem całej sieci.
 function clampK(w0, k) {
   const b = currentMap().bounds, minW = Math.max(b.w / 12, 120), maxW = b.w * 2;
@@ -568,6 +586,37 @@ app.addEventListener('wheel', (e) => {
   zoomAt(Math.exp((e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * 0.0015), e.clientX, e.clientY);
 }, { passive: false });
 
+// Dymek po najechaniu na stację: linie (z „na żądanie”), koordynaty X/Z, stan stacji.
+function tipHtml(id) {
+  const s = byId('stacje', id);
+  if (!s) return '';
+  const xz = (loc) => (U.hasCoord(loc.x) && U.hasCoord(loc.z) ? `X <b>${esc(loc.x)}</b> · Z <b>${esc(loc.z)}</b>` : '<span class="muted">brak koordynatów</span>');
+  const locs = [s, ...(s.portal && s.wymiar2 ? [U.side2(s)] : [])]
+    .map((loc) => `<div class="mt-loc mono">${U.DIM_ICON[loc.wymiar] || ''} ${xz(loc)}</div>`).join('');
+  const ls = state.linie.filter((l) => (l.trasa || []).some((t) => t.stacja === id)).sort(U.byName);
+  const rows = ls.map((l) => {
+    const nz = (l.trasa || []).some((t) => t.stacja === id && t.nz);
+    return `<div class="mt-line">${U.lineChip(l)}${nz ? '<span class="nz-tag">✋ na żądanie</span>' : ''}</div>`;
+  }).join('');
+  return `<div class="mt-name"><b>${esc(s.nazwa)}</b> <span class="code">${esc(s.kod)}</span>${s.status !== 'czynna' ? ` <span class="pill warn">${esc(U.STACJA_STATUS[s.status] || '')}</span>` : ''}</div>
+    ${locs}${rows ? `<div class="mt-lines">${rows}</div>` : ''}`;
+}
+function hideTip() { const t = app.querySelector('.map-tip'); if (t) { t.hidden = true; t.dataset.for = ''; } }
+app.addEventListener('pointermove', (e) => {
+  const tip = app.querySelector('.map-tip');
+  if (!tip) return;
+  const a = e.pointerType === 'mouse' && !(dragged && ptrs.size) ? e.target.closest('.m-st-a') : null;
+  if (!a) { if (!tip.hidden) hideTip(); return; }
+  if (tip.dataset.for !== a.dataset.st) { tip.innerHTML = tipHtml(a.dataset.st); tip.dataset.for = a.dataset.st; }
+  tip.hidden = false;
+  const box = tip.parentElement.getBoundingClientRect();
+  let x = e.clientX - box.left + 14, y = e.clientY - box.top + 14;
+  if (x + tip.offsetWidth > box.width - 8) x = e.clientX - box.left - tip.offsetWidth - 14;
+  if (y + tip.offsetHeight > box.height - 8) y = e.clientY - box.top - tip.offsetHeight - 14;
+  tip.style.left = `${Math.max(8, x)}px`; tip.style.top = `${Math.max(8, y)}px`;
+});
+app.addEventListener('pointerleave', hideTip);
+
 async function downloadMap(type) {
   const svg = mapEl();
   if (!svg) return;
@@ -591,7 +640,9 @@ function render() {
   if (!['stacje', 'linie', 'komunikaty'].every((c) => state.ready[c])) { app.innerHTML = '<p class="loading">Ładowanie…</p>'; return; }
   const { p, id } = route();
   const views = { '': viewHome, polaczenia: () => viewPolaczenia(id), mapa: () => viewMapa(id), linie: viewLinie, linia: () => viewLinia(id), stacje: viewStacje, stacja: () => viewStacja(id), archiwum: viewArchiwum, komunikat: () => viewKomunikat(id) };
+  document.body.classList.toggle('page-wide', p === 'mapa');   // mapa dostaje szerszą stronę niż reszta
   renderInto(app, (views[p] || (() => notFound('Nie ma takiej strony.')))());
+  if (p === 'mapa') fitMap();
 }
 
 app.addEventListener('input', (e) => {
